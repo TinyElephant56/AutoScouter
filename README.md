@@ -1,5 +1,4 @@
-# Project Name
-AutoScout
+# Autoscout
 by Colin Haine, March 2025
 
 ## Description
