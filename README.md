@@ -10,6 +10,7 @@ trained specifically on cave2025.
 uses easyocr to look for the numbers on the bumpers.
 
 run +detectionwithtext.py
+or +video_detection after downloading the video from elims 13 from stream-youtube.py
 
 ai robot detection model dataset:
 https://universe.roboflow.com/frcrobotfinder/ventura-2025 
@@ -18,9 +19,9 @@ https://universe.roboflow.com/frcrobotfinder/ventura-2025
 more or less in order of what i'll work on
 - location the position of all six robots
     - find clumps of two points, each point is a different angles
-- ✅impliment video
+- ✅ impliment video- its actually pretty fast!
     - find the optimal arrangement for the corners so that the detections overlap best
-    - see if number detection greatly lowers speed
+    - ✅ see if number detection greatly lowers speed it does- about 3x slower with what i have
 - add tracking:
     - in the past i just got the closest new detection to a robot in the last frame to use as the new position
     - with bumper number detection we can be more observant to ensure that the robots don't switch
@@ -49,7 +50,7 @@ pip install -r requirements.txt
 ```
 if i forgot something or you need the corerct version, look in requirements-dump.txt.  it has some really random stuff lmao.
 
-i did it in a venv (i keep forgetting how to start it...)
+i did it in a venv (i keep forgetting how to start it so i put the code here)
 ```sh
 python3 -m venv yolo-env
 source yolo-env/bin/activate
