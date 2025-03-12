@@ -9,20 +9,27 @@ import cv2
 from ultralytics import YOLO
 import numpy as np
 import easyocr
+import math
+
 
 cap = cv2.VideoCapture("../Captures/elims_13.mp4")
 cap.set(cv2.CAP_PROP_POS_MSEC, 15000)
 
 field_reference = cv2.imread("top-down.png")
-# image = field_reference.copy() # used for the numbers
+
+#---toggle number detection---
+text_detection = True
+#---way faster when its off---
 
 # some constants:
 colors = {"red": (0, 0, 225), "blue": (255, 0, 0)}
-confidence_threshold = 0.5
+confidence_threshold = 0.4
 
 print("setting up models...")
 model = YOLO("ventura-best.pt") #robot detection model
-# reader = easyocr.Reader(['en'], recog_network='english_g2', user_network_directory=None) #text detection model
+
+if text_detection:
+    reader = easyocr.Reader(['en'], recog_network='english_g2', user_network_directory=None) #text detection model
 
 allcorners = json.load(open(f"fieldcorners.json", 'r'))
 # fieldcorners: the top down diagram
@@ -38,6 +45,7 @@ rightframecorners = allcorners["rightframecorners"]
 fullmatrix = cv2.getPerspectiveTransform(np.array(fullframecorners, dtype="float32"), np.array(fullfieldcorners, dtype="float32"))
 leftmatrix = cv2.getPerspectiveTransform(np.array(leftframecorners, dtype="float32"), np.array(leftfieldcorners, dtype="float32"))
 rightmatrix = cv2.getPerspectiveTransform(np.array(rightframecorners, dtype="float32"), np.array(rightfieldcorners, dtype="float32"))
+robots = []
 
 print("detecting")
 # do the detections
@@ -53,9 +61,9 @@ while True:
     bboxes = np.array(result.boxes.xyxy.cpu(), dtype="int")
     confidences = np.array(result.boxes.conf.cpu())
     classes = np.array(result.boxes.cls.cpu(), dtype="int")
-    robots = []
+    detections = []
     # each item in robots is a detection.
-    # [0: id, 1: center cord, 2: color, 3: confidence, 4: bbox top-left, 5: bbox bottom-right, 6: detected number]
+    # [0: id, 1: center cord, 2: color, 3: confidence, 4: bbox top-left, 5: bbox bottom-right, 6: detected number, 7: ]
 
     id = 0
     for cls, bbox, conf in zip(classes, bboxes, confidences):
@@ -64,13 +72,64 @@ while True:
         if conf > confidence_threshold:
             if cls == 0:
                 cv2.circle(frame, (int((x1+x2)/2), int((y2-y1)*0.6+y1)), 20, colors["blue"], 5)
-                robots.append([id, cord, "blue", conf, (x1, y1), (x2, y2), 0])
+                detections.append([id, cord, "blue", conf, (x1, y1), (x2, y2), 0, "-"])
             elif cls == 1:
                 cv2.circle(frame, (int((x1+x2)/2), int((y2-y1)*0.6+y1)), 20, colors["red"], 5)
-                robots.append([id, cord, "red", conf, (x1, y1), (x2, y2), 0])
+                detections.append([id, cord, "red", conf, (x1, y1), (x2, y2), 0, "-"])
         id += 1
 
-    # plot out the corners on the images visually
+    if len(robots) == 0:# intitialize  robots
+        pass
+    else:
+        #update robots
+        pass
+    
+    if text_detection:
+        for robot in detections:
+            x1, y1, x2, y2 = robot[4][0], robot[4][1]+5, robot[5][0], robot[5][1]+5
+            searchbox = frame[y1:y2, x1:x2]
+
+            # do some processing to detect numbers better
+            searchbox = cv2.cvtColor(searchbox, cv2.COLOR_BGR2GRAY)
+            gaussian = cv2.GaussianBlur(searchbox, (3, 3), 0)
+            searchbox = cv2.addWeighted(searchbox, 2.0, gaussian, -1.0, 0)
+            searchbox = cv2.resize(searchbox, None, fx=2, fy=2, interpolation=cv2.INTER_LANCZOS4)
+
+            text = reader.readtext(searchbox, detail=0, allowlist="0123456789") 
+            robot[6] = text
+            # cv2.rectangle(frame, robot[4], robot[5], (0, 0, 225), 5)
+            cv2.putText(frame, f"{robot[0]}: {robot[6]}", (x1, y1 - 5), 0, 1, (255, 255, 255), 3)
+        
+    #turn the coordinate into the top down view
+    for i in range(len(detections)):
+        robot = detections[i]
+        cord = robot[1]
+        point = np.array([[cord]], dtype="float32")
+        if cord[1] < 644:  # detections in the top full field camera
+            transformed_x, transformed_y = map(int, cv2.perspectiveTransform(point, fullmatrix)[0][0])
+            detections[i][1] = (transformed_x, transformed_y)
+            detections[i][7] = "top"
+        else:
+            if cord[0] < 959:  # detections in the left field camera
+                transformed_x, transformed_y = map(int, cv2.perspectiveTransform(point, leftmatrix)[0][0])
+                detections[i][1] = (transformed_x, transformed_y)
+                detections[i][7] = "side"
+            else:  # detections in the right field camera
+                transformed_x, transformed_y = map(int, cv2.perspectiveTransform(point, rightmatrix)[0][0])
+                detections[i][1] = (transformed_x, transformed_y)
+                detections[i][7] = "side"
+    
+    #find center of two points
+    # code here
+    
+    # for i in range(len(detections)):
+    for detection in detections:
+        if detection[7] == "top":
+            cv2.circle(field, detection[1], 20, colors[detection[2]], 3)   
+        else:
+            cv2.circle(field, detection[1], 20, colors[detection[2]], -1)   
+        cv2.putText(field, f"{round(detection[3]*100)}%", detection[1], 0, 1, (0, 0, 0), round(detection[3] * 5))
+    
     for corners in [fullframecorners, leftframecorners, rightframecorners]:
         for corner in corners:
             cv2.circle(frame, (corner[0], corner[1]), 10, (0, 255, 0), -1)
@@ -78,27 +137,7 @@ while True:
         for corner in corners:
             cv2.circle(field, (corner[0], corner[1]), 10, (0, 255, 0), -1)
 
-    for robot in robots:
-        cord = robot[1]
-        point = np.array([[cord]], dtype="float32")
-        if cord[1] < 644: # detections in the top full field camera
-            transformed_point = cv2.perspectiveTransform(point, fullmatrix)
-            
-            transformed_x, transformed_y = transformed_point[0][0]
-            fixed_point = (int(transformed_x), int(transformed_y))
-            cv2.circle(field, fixed_point, 20, colors[robot[2]], 5)      
-            cv2.putText(field, f"{robot[0]}: {robot[6]}", fixed_point, 0, 1, (0, 0, 0), round(robot[3]*5))
-        else:
-            if cord[0] < 959: # detections in the left field camera
-                transformed_point = cv2.perspectiveTransform(point, leftmatrix)
-            else: # detections in the right field camera
-                transformed_point = cv2.perspectiveTransform(point, rightmatrix)
-            
-            transformed_x, transformed_y = transformed_point[0][0]
-            fixed_point = (int(transformed_x), int(transformed_y))
-            cv2.circle(field, fixed_point, 20, colors[robot[2]], -1)      
-            cv2.putText(field, f"{robot[0]}: {robot[6]}", fixed_point, 0, 1, (0, 0, 0), round(robot[3]*5))
-
+    
     cv2.imshow("video capture", field)
     cv2.imshow("top down view", frame)
 
