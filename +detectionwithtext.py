@@ -85,7 +85,7 @@ for robot in robots:
     text = reader.readtext(searchbox, detail=0, allowlist="0123456789") 
     robot[6] = text
     # cv2.rectangle(frame, robot[4], robot[5], (0, 0, 225), 5)
-    cv2.putText(frame, f"{robot[0]}: {robot[6]}", (x1, y1 - 5), 0, 1, (0, 0, 0), 3)
+    cv2.putText(frame, f"{robot[0]}: {robot[6]}", (x1, y1 - 5), 0, 1, (255, 255, 255), 3)
 
 
 for robot in robots:

@@ -3,7 +3,7 @@
 
 import cv2
 import os
-
+import random
 def extract_frames(video_path, output_folder):
     # Open video file
     cap = cv2.VideoCapture(video_path)
@@ -38,7 +38,7 @@ def extract_frames(video_path, output_folder):
     print("Frame extraction complete.")
 
 # Example usage
-base = "/Users/colinhaine/Desktop/yolo-env/Captures/"
+base = f"/Users/colinhaine/Desktop/yolo-env/Captures/"
 path = input("vid name: ")
 video_file = base+path
 output_directory = f"Captures/frames/{path}"  # Folder to save frames
