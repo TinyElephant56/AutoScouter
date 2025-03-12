@@ -1,0 +1,7 @@
+streamlink
+moviepy
+opencv-python
+numpy
+ultralytics
+easyocr
+requests
