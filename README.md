@@ -16,11 +16,13 @@ https://universe.roboflow.com/frcrobotfinder/ventura-2025
 
 ## Next steps
 more or less in order of what i'll work on
-- decide the position of all six robots
+- location the position of all six robots
     - find clumps of two points, each point is a different angles
-- impliment video (this isn't that hard, just loop through frame by frame)
+✅ impliment video
+    - find the optimal arrangement for the corners so that the detections overlap best
+    - see if number detection greatly lowers speed
 - add tracking:
-    - in the past i just got the closest point from the past frame
+    - in the past i just got the closest new detection to a robot in the last frame to use as the new position
     - with bumper number detection we can be more observant to ensure that the robots don't switch
     - if we can get paths, we can determine velocity. the predicted spot can be a third coordinate to be used when determining robot coordinates
     - a path display
@@ -52,3 +54,5 @@ i did it in a venv (i keep forgetting how to start it...)
 python3 -m venv yolo-env
 source yolo-env/bin/activate
 ```
+
+if you have any questions dont be afraid to ask
