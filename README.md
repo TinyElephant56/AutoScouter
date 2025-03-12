@@ -18,6 +18,7 @@ https://universe.roboflow.com/frcrobotfinder/ventura-2025
 more or less in order of what i'll work on
 - location the position of all six robots
     - find clumps of two points, each point is a different angles
+  
 ✅ impliment video
     - find the optimal arrangement for the corners so that the detections overlap best
     - see if number detection greatly lowers speed
