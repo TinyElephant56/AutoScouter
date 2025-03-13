@@ -17,10 +17,10 @@ ai robot detection model dataset, trained specifically on cave2025:
 https://universe.roboflow.com/frcrobotfinder/ventura-2025 
 
 ### Run it
-run +video_detection.py
-the corners are usinghe video from elims 13 
-you can get a youtube stream using stream-youtube.py
-you can get new corner values with select-corners.py, and paste them into fieldcorners.json
+- run +video_detection.py
+- right now, its set up to use the video from elims 13 cave.
+- you can get a youtube stream using stream-youtube.py
+- you can get new corner values with select-corners.py, and paste them into fieldcorners.json
 
 ### Next steps
 more or less in order of what i'll work on
