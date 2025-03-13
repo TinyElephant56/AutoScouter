@@ -19,7 +19,7 @@ cap.set(cv2.CAP_PROP_POS_MSEC, 15000)
 field_reference = cv2.imread("top-down.png")
 
 #---toggle number detection---
-TEXT_DETECTION = True
+TEXT_DETECTION = False
 #---way faster when its off---
 options = {
     "blue": ['5026', '6060', '3863'],
@@ -30,7 +30,7 @@ MATCH_THRESHOLD = 50
 
 
 # some constants:
-COLORS = {"red": (0, 0, 225), "blue": (255, 0, 0)}
+COLORS = {"red": (0, 0, 255), "blue": (255, 0, 0), "grey": (128, 128, 128), "dull-red": (150, 126, 126), "dull-blue": (126, 126, 150)}
 CONFIDENCE_THRESHOLD = 0.4
 
 print("setting up models...")
@@ -53,17 +53,15 @@ rightframecorners = allcorners["rightframecorners"]
 fullmatrix = cv2.getPerspectiveTransform(np.array(fullframecorners, dtype="float32"), np.array(fullfieldcorners, dtype="float32"))
 leftmatrix = cv2.getPerspectiveTransform(np.array(leftframecorners, dtype="float32"), np.array(leftfieldcorners, dtype="float32"))
 rightmatrix = cv2.getPerspectiveTransform(np.array(rightframecorners, dtype="float32"), np.array(rightfieldcorners, dtype="float32"))
-robots = []
+paths_red = []
+paths_blue = []
 
 print("detecting")
-# do the detections
-
-cv2.imshow("top down view", field_reference)
-
-ret, frame = cap.read()
-cv2.imshow("video", frame)
-
-cv2.waitKey(0)
+#  a pause to drag windows around:
+# cv2.imshow("top down view", field_reference)
+# ret, frame = cap.read()
+# cv2.imshow("video", frame)
+# cv2.waitKey(0)
 
 while True:    
     ret, frame = cap.read()
@@ -93,12 +91,6 @@ while True:
                 cv2.circle(frame, (int((x1+x2)/2), int((y2-y1)*0.6+y1)), 20, COLORS["red"], 5)
                 detections.append([id, cord, "red", conf, (x1, y1), (x2, y2), "", "-"])
         id += 1
-
-    if len(robots) == 0:# intitialize  robots
-        pass
-    else:
-        #update robots
-        pass
     
     if TEXT_DETECTION:
         for i in range(len(detections)):
@@ -122,8 +114,6 @@ while True:
                 else:
                     detections[i][6] = "X" + text
             cv2.putText(frame, f"{detections[i][6]}", (x1, y1 - 5), 0, 1, (255, 255, 255), 3)
-
-
         
     #turn the coordinate into the top down view
     for i in range(len(detections)):
@@ -145,15 +135,61 @@ while True:
     
     #find center of two points
     # code here
-    
-    # for i in range(len(detections)):
+ 
+    # for i in range(len(detections), len(detections)-1):
+    #     for j in range(i, len(detections)):
+    #         if math.dist(detections[i][1], detections[j][1]) < 50:
+    #             print("joined together!")
+    #             detections.append()
+    #             detections.pop(j)
+    #             detections.pop(i)
+                
+    #             break
+        
+    #--- graph it ---
     for detection in detections:
         if detection[7] == "top":
-            cv2.circle(field, detection[1], 20, COLORS[detection[2]], 3)   
+            cv2.circle(field, detection[1], 20, COLORS["dull-"+detection[2]], 3)   
         else:
-            cv2.circle(field, detection[1], 20, COLORS[detection[2]], -1)   
+            cv2.circle(field, detection[1], 20, COLORS["dull-"+detection[2]], -1)   
         cv2.putText(field, f"{detection[6]}", detection[1], 0, 1, (0, 0, 0), round(detection[3] * 5))
     
+    #--- 
+    d = detections.copy()
+
+    while len(d) >= 2:
+        shortest = 80 #try to beat this distance
+        best_pair = None
+        for i in d:
+            for j in d:
+                if i[2] == j[2] and i[7] != 'midpoint' and j[7] != 'midpoint' and i[7] != j[7]:
+                    dist = math.dist(i[1], j[1])
+                    if dist < shortest:
+                        shortest = dist
+                        best_pair = (i, j)
+        if best_pair:
+            i, j = best_pair
+            midpoint = ((i[1][0] + j[1][0]) // 2, (i[1][1] + j[1][1]) // 2)
+            d.append([(i[0] * 100 + j[0]), midpoint, i[2], (i[3] + j[3]), i[4], i[5], i[6], 'midpoint'])
+
+            for k in d[:]:
+                if math.dist(midpoint, k[1]) < 60 and k[7] != 'midpoint':
+                    d.remove(k)
+        else:
+            break
+    i = 0
+    while i < len(d) - 1:
+        j = i + 1
+        while j < len(d):
+            if math.dist(d[i][1], d[j][1]) < 20:
+                d.pop(j) 
+            else:
+                j += 1  
+        i += 1  
+    
+    for robot in d:
+        cv2.circle(field, robot[1], 10, COLORS[robot[2]], -1)
+    #--
     for corners in [fullframecorners, leftframecorners, rightframecorners]:
         for corner in corners:
             cv2.circle(frame, (corner[0], corner[1]), 10, (0, 255, 0), -1)
@@ -161,7 +197,7 @@ while True:
         for corner in corners:
             cv2.circle(field, (corner[0], corner[1]), 10, (0, 255, 0), -1)
 
-    
+    cv2.circle(field, (300, 300), 60, COLORS["grey"], 2)
     cv2.imshow("top down view", field)
     cv2.imshow("video", frame)
 
@@ -174,6 +210,7 @@ while True:
     # if key == 27:
     #     break
 
+print(detections)
 print("stopped.")
 cap.release()
 cv2.destroyAllWindows()
