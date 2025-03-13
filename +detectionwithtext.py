@@ -1,4 +1,7 @@
-# the main file. 
+# use video_detection for most up to date code.
+
+# this tracks a single grame, video_detection tracks a video
+
 # from an image (frame), it a trained YOLO to detect robots
 # then for each robot it tries to get the bumper number
 # two windows will pop up showing the detections
