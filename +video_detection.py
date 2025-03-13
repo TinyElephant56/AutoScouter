@@ -11,7 +11,6 @@ import numpy as np
 import easyocr
 import math
 from rapidfuzz import process, fuzz
-import time
 
 cap = cv2.VideoCapture("../Captures/elims_13.mp4")
 cap.set(cv2.CAP_PROP_POS_MSEC, 15000)
@@ -30,7 +29,7 @@ MATCH_THRESHOLD = 50
 
 
 # some constants:
-COLORS = {"red": (0, 0, 255), "blue": (255, 0, 0), "grey": (128, 128, 128), "dull-red": (150, 126, 126), "dull-blue": (126, 126, 150)}
+COLORS = {"red": (0, 0, 255), "blue": (255, 0, 0), "grey": (128, 128, 128), "dull-red": (224, 215, 215), "dull-blue": (204, 211, 237)}
 CONFIDENCE_THRESHOLD = 0.4
 
 print("setting up models...")
@@ -48,26 +47,29 @@ rightfieldcorners = allcorners["rightfieldcorners"]
 fullframecorners = allcorners["fullframecorners"]
 leftframecorners = allcorners["leftframecorners"]
 rightframecorners = allcorners["rightframecorners"]
-
 # get perspective matricies to convert between the top down and camera perspectives
 fullmatrix = cv2.getPerspectiveTransform(np.array(fullframecorners, dtype="float32"), np.array(fullfieldcorners, dtype="float32"))
 leftmatrix = cv2.getPerspectiveTransform(np.array(leftframecorners, dtype="float32"), np.array(leftfieldcorners, dtype="float32"))
 rightmatrix = cv2.getPerspectiveTransform(np.array(rightframecorners, dtype="float32"), np.array(rightfieldcorners, dtype="float32"))
-paths_red = []
-paths_blue = []
 
+active_paths = []
+archived_paths = []
+path_id = 0
+PATH_DRAW = True
+
+# a pause to drag windows around:
+cv2.imshow("top down view", field_reference)
+ret, frame = cap.read()
+cv2.imshow("video", frame)
+cv2.waitKey(0)
 print("detecting")
-#  a pause to drag windows around:
-# cv2.imshow("top down view", field_reference)
-# ret, frame = cap.read()
-# cv2.imshow("video", frame)
-# cv2.waitKey(0)
 
 while True:    
     ret, frame = cap.read()
     if not ret:
         break
-    
+
+    frame_number = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
     field = field_reference.copy()
 
     results = model(frame, device="mps", verbose=False, iou=0.8)
@@ -77,7 +79,7 @@ while True:
     classes = np.array(result.boxes.cls.cpu(), dtype="int")
     detections = []
     # each item in robots is a detection.
-    # [0: id, 1: center cord, 2: color, 3: confidence, 4: bbox top-left, 5: bbox bottom-right, 6: detected number, 7: ]
+    # [0: id, 1: center cord, 2: color, 3: confidence, 4: bbox top-left, 5: bbox bottom-right, 6: detected number, 7: type]
 
     id = 0
     for cls, bbox, conf in zip(classes, bboxes, confidences):
@@ -133,19 +135,6 @@ while True:
                 detections[i][1] = (transformed_x, transformed_y)
                 detections[i][7] = "side"
     
-    #find center of two points
-    # code here
- 
-    # for i in range(len(detections), len(detections)-1):
-    #     for j in range(i, len(detections)):
-    #         if math.dist(detections[i][1], detections[j][1]) < 50:
-    #             print("joined together!")
-    #             detections.append()
-    #             detections.pop(j)
-    #             detections.pop(i)
-                
-    #             break
-        
     #--- graph it ---
     for detection in detections:
         if detection[7] == "top":
@@ -154,9 +143,8 @@ while True:
             cv2.circle(field, detection[1], 20, COLORS["dull-"+detection[2]], -1)   
         cv2.putText(field, f"{detection[6]}", detection[1], 0, 1, (0, 0, 0), round(detection[3] * 5))
     
-    #--- 
-    d = detections.copy()
-
+    #--- d is cleaned up distance ---
+    d = detections.copy() 
     while len(d) >= 2:
         shortest = 80 #try to beat this distance
         best_pair = None
@@ -181,15 +169,55 @@ while True:
     while i < len(d) - 1:
         j = i + 1
         while j < len(d):
-            if math.dist(d[i][1], d[j][1]) < 20:
+            if math.dist(d[i][1], d[j][1]) < 40:
                 d.pop(j) 
             else:
                 j += 1  
         i += 1  
     
+    # --- graph the cleaned up robot positions---
     for robot in d:
         cv2.circle(field, robot[1], 10, COLORS[robot[2]], -1)
-    #--
+
+    # --- path detecting goes here ---
+    #path: [0:id, 1:init_frame, 2: color, 3: conf, 4:list of cords and times]
+    for path in archived_paths:
+        past = path[4]
+        color = path[2]
+        if len(past) > 1:
+            for i in range(len(past)-1):
+                cv2.line(field, past[i][1], past[i+1][1], COLORS["dull-"+color], 2)
+        
+    for path in active_paths[:]:
+        past = path[4]
+        last_frame = past[-1][0]
+        last_cord = past[-1][1]
+        color = path[2]
+        closest = 100
+        best_robot = None
+        for robot in d:
+            if math.dist(last_cord, robot[1]) < closest and color == robot[2]:
+                best_robot = robot
+        
+        if best_robot:
+            past += [[frame_number, best_robot[1]]]
+            d.remove(best_robot)
+            active_paths[active_paths.index(path)][4] = past
+        else:
+            if frame_number - last_frame > 5:
+                archived_paths.append(path)
+                active_paths.remove(path)
+                
+        #draw it
+        if len(past) > 1:
+            for i in range(len(past)-1):
+                cv2.line(field, past[i][1], past[i+1][1], COLORS[color], 2)
+
+    for robot in d: #initialize a path for any left over ones
+        active_paths.append([path_id, frame_number, robot[2], robot[3], [ [frame_number,robot[1]] ] ])
+        path_id += 1
+
+    # --- graph the corners ---
     for corners in [fullframecorners, leftframecorners, rightframecorners]:
         for corner in corners:
             cv2.circle(frame, (corner[0], corner[1]), 10, (0, 255, 0), -1)
@@ -197,18 +225,18 @@ while True:
         for corner in corners:
             cv2.circle(field, (corner[0], corner[1]), 10, (0, 255, 0), -1)
 
-    cv2.circle(field, (300, 300), 60, COLORS["grey"], 2)
+    cv2.circle(field, (300, 300), 40, COLORS["grey"], 2)
     cv2.imshow("top down view", field)
     cv2.imshow("video", frame)
 
-    #go through the video as fast as possible
     if cv2.waitKey(1) == 27:
         break
-
     #code for frame by frame stepper
     # key = cv2.waitKey(0)
     # if key == 27:
     #     break
+archived_paths += active_paths
+
 
 print(detections)
 print("stopped.")
