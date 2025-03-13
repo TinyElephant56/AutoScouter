@@ -6,12 +6,12 @@ the goal is to be able to fully scout a FRC match, to get each of the robot's fu
 a work in progress
 
 ### How it works
-1: ai detects the robots in every frame using YOLOv8 model
-2: perspective transform the points onto the map
-3: clump points together
-4: form a list of smaller paths
-4.5-partially done: use bumper numbers to determine the confidence in each path (easyocr)
-5-not done: stitch the paths together into one big one for each robot
+- 1: ai detects the robots in every frame using YOLOv8 model
+- 2: perspective transform the points onto the map
+- 3: clump points together
+- 4: form a list of smaller paths
+- 4.5 [partially done]: use bumper numbers to determine the confidence in each path (easyocr)
+- 5 [not done]: stitch the paths together into one big one for each robot
 
 ai robot detection model dataset, trained specifically on cave2025:
 https://universe.roboflow.com/frcrobotfinder/ventura-2025 
