@@ -2,9 +2,11 @@
 
 import yt_dlp
 import random
+import os
+
+scriptdir = os.path.dirname(os.path.abspath(__file__))
 
 url = input("youtube url: ")
-
 
 def download_youtube_video(youtube_url, output_path="video.mp4"):
     ydl_opts = {
@@ -16,4 +18,4 @@ def download_youtube_video(youtube_url, output_path="video.mp4"):
         ydl.download([youtube_url])
         print(f"Downloaded video to {output_path}")
 
-download_youtube_video(url, f'../Captures/{random.randint(0, 999999)}.mp4')
+download_youtube_video(url, f'{scriptdir}/../Captures/{random.randint(0, 999999)}.mp4')

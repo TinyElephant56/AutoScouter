@@ -1,3 +1,5 @@
+# only detects robots from an image. go to +detectionwithtext.py
+
 import json
 import requests
 import cv2
