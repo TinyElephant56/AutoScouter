@@ -36,7 +36,7 @@ COLORS = {"red": (0, 0, 255), "blue": (255, 0, 0), "grey": (128, 128, 128), "dul
 CONFIDENCE_THRESHOLD = 0.4
 
 print("setting up models...")
-model = YOLO(scriptdir+"/ventura-best.pt") #robot detection model
+model = YOLO(scriptdir+"/ventura-best-2.pt") #robot detection model
 
 if TEXT_DETECTION:
     reader = easyocr.Reader(['en'], recog_network='english_g2', user_network_directory=None) #text detection model
@@ -61,7 +61,7 @@ active_paths = []
 archived_paths = []
 path_id = 0
 PATH_DRAW = True
-PAUSE = False
+PAUSE = True
 STEPTHROUGH = False
 # a pause to drag windows around:
 
@@ -232,7 +232,7 @@ while True:
             d.remove(best_robot)
             active_paths[active_paths.index(path)][3] = confidence
             active_paths[active_paths.index(path)][4] = past
-        elif frame_number - last_frame > 5:
+        elif frame_number - last_frame > 8: # <- here
             archived_paths.append(path)
             active_paths.remove(path)
         if len(past) > 1:  
