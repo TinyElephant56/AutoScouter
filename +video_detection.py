@@ -17,19 +17,21 @@ import os
 scriptdir = os.path.dirname(os.path.abspath(__file__))
 print(f"{scriptdir}")
 
-cap = cv2.VideoCapture(scriptdir+"/../Captures/elims_2.mp4")
+cap = cv2.VideoCapture(scriptdir+"/../Captures/finals_1.mp4")
 cap.set(cv2.CAP_PROP_POS_MSEC, 8000)
 
 field_reference = cv2.imread(scriptdir+"/top-down.png")
 
 #---toggle number detection---
-TEXT_DETECTION = False
+TEXT_DETECTION = False #unfinished, broken rn
 #---way faster when its off---
 options = {
     "blue": ['5026', '6060', '3863'],
     "red": ['971', '4079', '589']
 }
 MATCH_THRESHOLD = 50
+
+GROUP_DISTANCE = 100
 
 # some constants:
 COLORS = {"red": (0, 0, 255), "blue": (255, 0, 0), "grey": (128, 128, 128), "dull-red": (204, 211, 237), "dull-blue": (224, 215, 215)}
@@ -61,7 +63,7 @@ active_paths = []
 archived_paths = []
 path_id = 0
 PATH_DRAW = True
-PAUSE = True
+PAUSE = False
 STEPTHROUGH = False
 # a pause to drag windows around:
 
@@ -163,7 +165,7 @@ while True:
     #--- d is cleaned up distance ---
     d = detections.copy() 
     while len(d) >= 2:
-        shortest = 80 #try to beat this distance
+        shortest = GROUP_DISTANCE #try to beat this distance
         best_pair = None
         for i in d:
             for j in d:
@@ -200,6 +202,7 @@ while True:
     # --- graph the cleaned up robot positions---
     for robot in d:
         cv2.circle(field, robot.cord, 10, COLORS[robot.color], -1)
+        cv2.putText
 
     # --- path detecting goes here ---
     #path: [0:id, 1:init_frame, 2: color, 3: conf, 4:list of cords and times]
@@ -264,24 +267,9 @@ print("stopped.")
 cap.release()
 cv2.destroyAllWindows()
 
-# chill_one_second = input('frigging packet')
-# --- clean up false positives ---
 archived_paths += active_paths
-for path in archived_paths[:]:
-    confidence = path[3]
-    if path[3] < 3: #if the path is about 1, 2, or 3 frames kill it 
-        archived_paths.remove(path)
-with open ('+output.txt', 'w') as file:
-    file.write(str(archived_paths))
-print(frame_number)
 
-# chill_one_second = input('frigging packet')
-# #--- second track ---
-# robots = []
-# #robot [0:id, 1:(recentcord), 2: color 3: number 4: paths]
-# frame = 0
-# for frame in range(frame_count):
-#     for path in archived_paths:
-#         if path[1] == frame:
-#             print(f'initialized! at frame {frame}')
-#     time.sleep(0.0333)
+if input("save paths to output.txt? [y/n]") == 'y':
+    with open ('+output.txt', 'w') as file:
+        file.write(str(archived_paths))
+    print(frame_number)
