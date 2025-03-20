@@ -29,10 +29,6 @@ cap.set(cv2.CAP_PROP_POS_MSEC, 8000)
 
 field_reference = cv2.imread(scriptdir+"/top-down.png")
 
-#---toggle number detection---
-TEXT_DETECTION = False #unfinished, broken rn
-#---way faster when its off---
-
 options = {
     "blue": [x[3:] for x in data['blue']['numbers']],
     "red": [x[3:] for x in data['red']['numbers']]
@@ -50,8 +46,7 @@ CONFIDENCE_THRESHOLD = 0.4
 print("setting up models...")
 model = YOLO(scriptdir+"/ventura-best-2.pt") #robot detection model
 
-if TEXT_DETECTION:
-    reader = easyocr.Reader(['en'], recog_network='english_g2', user_network_directory=None) #text detection model
+reader = easyocr.Reader(['en'], recog_network='english_g2', user_network_directory=None) #text detection model
 
 allcorners = json.load(open(scriptdir+"/fieldcorners.json", 'r'))
 # fieldcorners: the top down diagram
@@ -77,6 +72,21 @@ PAUSE = False
 STEPTHROUGH = False
 # a pause to drag windows around:
 
+def get_numbers(bbox1, bbox2): ## OLD NOT UPDATED FOR DETECTION OBJECT
+        x1, y1 = bbox1
+        x2, y2 = bbox2
+        searchbox = frame[y1:y2, x1:x2]
+
+        # do some processing to detect numbers better
+        searchbox = cv2.cvtColor(searchbox, cv2.COLOR_BGR2GRAY)
+        gaussian = cv2.GaussianBlur(searchbox, (3, 3), 0)
+        searchbox = cv2.addWeighted(searchbox, 2.0, gaussian, -1.0, 0)
+        searchbox = cv2.resize(searchbox, None, fx=2, fy=2, interpolation=cv2.INTER_LANCZOS4)
+
+        text = reader.readtext(searchbox, detail=0, allowlist="0123456789") 
+        return text
+        
+
 class Detection:
     def __init__(self, id, cord, color, conf, bbox1, bbox2, number, type):
         self.id = id
@@ -95,8 +105,11 @@ class Path:
         self.color = color
         self.last_cord = last_cord
         self.cords = cords
+
+        self.number = None
+
     def __str__(self):
-        return str([0, self.init_time, self.color, 0, self.cords], )
+        return str([0, self.init_time, self.color, self.number, self.cords], )
         #path: [0:id, 1:init_frame, 2: color, 3: conf, 4:list of cords and times]
 
         
@@ -157,9 +170,7 @@ while True:
             cv2.circle(field, detection.cord, 20, COLORS["dull-"+detection.color], 3)   
         else:
             cv2.circle(field, detection.cord, 20, COLORS["dull-"+detection.color], -1)   
-        cv2.putText(field, f"{detection.number}", detection.cord, 0, 1, (0, 0, 0), round(detection.conf * 5))
     
-    #--- match up side to side ---
     d = detections.copy() 
     # remove duplicate detections
     i = 0
@@ -177,6 +188,7 @@ while True:
                 j += 1  
         i += 1  
 
+    #--- match up pairs of detections from different angles ---
     while len(d) >= 2:
         shortest = GROUP_DISTANCE #try to beat this distance
         best_pair = None
@@ -202,9 +214,9 @@ while True:
     # --- graph the cleaned up robot positions---
     for robot in d:
         cv2.circle(field, robot.cord, 10, COLORS[robot.color], -1)
-        cv2.putText
 
     # --- path detecting goes here ---
+    #make an list of how close every pair combination is
     distances = []
     for detection in d:
         for path in active_paths:
@@ -213,11 +225,25 @@ while True:
                 distances.append((distance, detection, path))
     distances = sorted(distances, key=lambda x: x[0])
 
+    
     for distance, detection, path in distances:
         if detection in d and path in active_paths and frame_number not in path.cords:
             path.cords[frame_number] = detection.cord
             path.last_cord = detection.cord
             path.last_time = frame_number
+
+            if len(path.cords)%20 == 5 and not path.number:
+                text = get_numbers(detection.bbox1, detection.bbox2)
+                if text:
+                    text = max(text, key=len)
+                    fuzzed = process.extractOne(text, options[detection.color], scorer=fuzz.ratio)
+                    if fuzzed[1] > 70:
+                        print(fuzzed[0])
+                        path.number = fuzzed[0]
+                    else:
+                        print(f"{detection.color} {text}, looks most like {fuzzed[0]}, conf {fuzzed[1]}")
+                cv2.rectangle(frame, detection.bbox1, detection.bbox2, COLORS[detection.color], 3, 1)
+
             d.remove(detection)
 
     for path in active_paths:
@@ -225,6 +251,7 @@ while True:
         if frame_number - path.last_time > min(12, len(path.cords)+1):
             archived_paths.append(path)
             active_paths.remove(path)
+            
         
     for detection in d: #start new paths
         active_paths.append(Path(frame_number, frame_number, detection.color, detection.cord, { frame_number:detection.cord } ))
@@ -243,33 +270,9 @@ while True:
                 frame1, frame2 = sorted_frames[i], sorted_frames[i + 1]
                 cv2.line(field, path.cords[frame1], path.cords[frame2], COLORS[path.color], 2)
         cv2.circle(field, path.last_cord, 10, (0, 0, 0), 2)
+        cv2.putText(field, f"{path.number}", path.last_cord, 0, 1, (0, 0, 0), 3)
 
 
-
-    if TEXT_DETECTION: ## OLD NOT UPDATED FOR DETECTION OBJECT
-        for detection in detections:
-            x1, y1 = detection.bbox1
-            x2, y2 = detection.bbox2
-            searchbox = frame[y1:y2, x1:x2]
-
-            # do some processing to detect numbers better
-            searchbox = cv2.cvtColor(searchbox, cv2.COLOR_BGR2GRAY)
-            gaussian = cv2.GaussianBlur(searchbox, (3, 3), 0)
-            searchbox = cv2.addWeighted(searchbox, 2.0, gaussian, -1.0, 0)
-            searchbox = cv2.resize(searchbox, None, fx=2, fy=2, interpolation=cv2.INTER_LANCZOS4)
-
-            text = reader.readtext(searchbox, detail=0, allowlist="0123456789") 
-            #it tries to fuzz, but its really bad at reading the numbers right now
-            if text:
-                text = max(text, key=len)
-                fuzzed = process.extractOne(text, options[detections[i][2]], scorer=fuzz.ratio)
-                if fuzzed[1] > MATCH_THRESHOLD:
-                    print(fuzzed[0])
-                    detections[i][6] = "!"+ str(fuzzed[0])
-                else:
-                    detections[i][6] = "X" + text
-            cv2.putText(frame, f"{detections[i][6]}", (x1, y1 - 5), 0, 1, (255, 255, 255), 3)
-        
     # --- graph the corners ---
     for corners in [fullframecorners, leftframecorners, rightframecorners]:
         for corner in corners:
@@ -293,7 +296,8 @@ output = '['
 for path in archived_paths:
     output += str(path)+", "
 output += ']'
+
 if input("save paths to +output.txt? [y/n]") == 'y':
-    with open ('+output.txt', 'w') as file:
+    with open (f'{scriptdir}/{key}_paths.txt', 'w') as file:
         file.write(output)
     print(frame_number)

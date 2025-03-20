@@ -80,7 +80,7 @@ end_frame = 0
 for path in paths:
     c = path[4]
     if len(c) > 10:
-        simplified_paths.append(Path(path[2], path[1], min(c), c[min(c)], max(c), c[max(c)], c))
+        simplified_paths.append(Path(color=path[2], number=path[3], start=min(c), startcord=c[min(c)], end=max(c), endcord=c[max(c)], cords=c))
         if min(c) < start_frame:
             start_frame = min(c)
         if max(c) > end_frame:
@@ -103,6 +103,8 @@ while frame_number < end_frame:
                         bestrobot = robot
             if bestrobot:
                 bestrobot.cords.update(path.cords) #add dict to dict
+                if not bestrobot.number:
+                    bestrobot.number = path.number
                 bestrobot.following = True
             elif len(robots) < 6:
                 robots.append(Robot(len(robots), path.startcord, path.color, path.number, path.cords, True))
@@ -119,7 +121,10 @@ while frame_number < end_frame:
                     bestrobot = robot
         if bestrobot:
             bestrobot.cords.update(path.cords) #add dict to dict
+            if not bestrobot.number:
+                    bestrobot.number = path.number
             bestrobot.following = True
+
             missed_paths.remove(path)
             print(f'rejoined with {bestrobot.id}')
 
@@ -293,7 +298,7 @@ while True:
                 cv2.line(field, robot.cords[frame1], robot.cords[frame2], COLORS[str(robot.id)], 2)
 
         cv2.circle(field, robot.cord, 10, tuple(round(c * 0.6) for c in COLORS[str(robot.id)]), -1)
-        cv2.putText(field, f"{robot.id}{robot.color}|{robot.cycles}|{robot.coral}", robot.cord, 0, 1, (0, 0, 0), 3)
+        cv2.putText(field, f"{robot.number}|{robot.cycles}", robot.cord, 0, 1, (0, 0, 0), 3)
         # if robot.intaking:
         #     cv2.putText(field, f"{round(intakes[robot.intaking].d_conf, 2)}", robot.cord, 0, 1, (0, 0, 0), 3)
         # if robot.scoring:
@@ -313,3 +318,5 @@ while True:
     
     if cv2.waitKey(1) == 27:
         break
+
+# put code here
