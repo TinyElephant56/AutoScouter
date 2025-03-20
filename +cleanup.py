@@ -6,21 +6,25 @@ import numpy as np
 import os
 import json
 import requests
+import csv
 
-with open('+output.txt', 'r') as file:
+scriptdir = os.path.dirname(os.path.abspath(__file__))
+
+with open(f'{scriptdir}/+current.txt', 'r') as file:
+    key = file.read()
+
+with open(f'{scriptdir}/{key}_paths.txt', 'r') as file:
     dump = file.read()
 paths = ast.literal_eval(dump)
 
 COLORS = {"0": (0, 0, 255), "1": (0, 255, 255), "2": (0, 255, 0), "3": (255, 255, 0), "4": (255, 0, 0), "5": (255, 0, 255)}
 robots = []
 
-# if live is True then the paths will be jagged and it will follow the robots in real time
-# if live is False then it will smooth the paths and be playing a replay of the robots paths
-# ------------------
-LIVE = False
-# ------------------
+LIVE = False #show the paths being matched or not
+REPLAY = True #show the match video or not
 
-# using classes so the code looks really clean
+FOLLOW_DISTANCE = 200
+
 class Robot:
     def __init__(self, id, cord, color, number, cords, following):
         self.id = id
@@ -31,9 +35,10 @@ class Robot:
         self.following = following
 
         self.scoring = None
+        self.intaking = None
         self.coral = 1
         self.movement = []
-
+        self.cycles = 0
 
 class Path:
     def __init__(self, color, number, start, startcord, end, endcord, cords):
@@ -46,19 +51,25 @@ class Path:
         self.cords = cords
 
 class ScoringInstance:
-    def __init__(self, time, coral_conf, distance_conf, m_conf, score_conf):
+    def __init__(self, time, coral_conf, d_conf, m_conf, score_conf, color):
         self.time = time
         self.coral_conf = coral_conf #how likely robot is to have coral
-        self.distance_conf = distance_conf
+        self.d_conf = d_conf
         self.m_conf = m_conf
         self.score_conf = score_conf
-        
-        # self._total_conf = coral_conf * distance_conf * m_conf * score_conf
     def get_total_conf(self):
-        return self.coral_conf * self.distance_conf * self.m_conf * self.score_conf
+        return self.coral_conf * self.d_conf * self.m_conf * self.score_conf
+    def __str__(self):
+        return f"{self.time}: {round(self.coral_conf, 2)}|{round(self.d_conf, 2)}|{round(self.m_conf)}|{round(self.score_conf)}"
 
-with open('scoreincrement.json', 'r') as file:
-    increments = json.load(file)
+class IntakeIntance:
+    def __init__(self, time, d_conf, m_conf, color):
+        self.time = time
+        self.d_conf = d_conf
+        self.m_conf = m_conf
+
+with open(f'{scriptdir}/{key}_data.json', 'r') as file:
+    matchdata = json.load(file)
 
 
 #--- get end frame of the paths
@@ -68,19 +79,23 @@ end_frame = 0
 
 for path in paths:
     c = path[4]
-    if len(c) > 5:
+    if len(c) > 10:
         simplified_paths.append(Path(path[2], path[1], min(c), c[min(c)], max(c), c[max(c)], c))
         if min(c) < start_frame:
             start_frame = min(c)
         if max(c) > end_frame:
             end_frame = max(c)
+    else:
+        pass
 
 #---------preprocess----------
+missed_paths = []
 frame_number = start_frame
 while frame_number < end_frame:
+    #if the path started on the frame, add it to the closest robot
     for path in simplified_paths:
         if path.start == frame_number:
-            closest = 200
+            closest = FOLLOW_DISTANCE
             bestrobot = None
             for robot in robots:
                 if not robot.following and robot.color == path.color:
@@ -89,19 +104,35 @@ while frame_number < end_frame:
             if bestrobot:
                 bestrobot.cords.update(path.cords) #add dict to dict
                 bestrobot.following = True
-                # print(f'path added, length of {len(path.cords)}')
             elif len(robots) < 6:
                 robots.append(Robot(len(robots), path.startcord, path.color, path.number, path.cords, True))
-                # print(f'robot created with path length of {len(path.cords)}')
             else:
-                print(f"oops, i missed out on a path that was {len(path.cords)}, at {path.startcord}")
+                print(f"missed {path.color} length {len(path.cords)}")
+                missed_paths.append(path)
+    
+    for path in missed_paths[:]:
+        closest = FOLLOW_DISTANCE
+        bestrobot = None
+        for robot in robots:
+            if not robot.following and robot.color == path.color:
+                if math.dist(robot.cord, path.startcord) < closest:
+                    bestrobot = robot
+        if bestrobot:
+            bestrobot.cords.update(path.cords) #add dict to dict
+            bestrobot.following = True
+            missed_paths.remove(path)
+            print(f'rejoined with {bestrobot.id}')
+
+    
     if LIVE:
         field = cv2.imread("/Users/colinhaine/Desktop/yolo-env/comptracker/top-down.png")
+    
     for robot in robots:
         if frame_number in robot.cords:
             robot.cord = robot.cords[frame_number]
         elif frame_number > max(robot.cords):
             robot.following = False
+        
         if LIVE:
             if len(robot.cords) > 1:  
                 sorted_frames = sorted(robot.cords.keys()) 
@@ -111,14 +142,21 @@ while frame_number < end_frame:
             cv2.circle(field, robot.cord, 5, COLORS[str(robot.id)], -1)
             cv2.putText(field, f"{robot.color}{robot.id}", robot.cord, 0, 1, (0, 0, 0), 3)
     if LIVE:
+        for path in missed_paths:
+            if len(path.cords) >1:
+                sorted_frames = sorted(path.cords.keys())
+                for i in range(len(sorted_frames) - 1):
+                    frame1, frame2 = sorted_frames[i], sorted_frames[i + 1]
+                    cv2.line(field, path.cords[frame1], path.cords[frame2], (200, 200, 200), 2)
         cv2.imshow('paths', field)
         if cv2.waitKey(1) == 27:
-            break
+            LIVE = False
+
     frame_number += 1
 print("done!")
 
 
-#functions created by chatgpt:
+#these functions are all created by chatgpt:
 def smooth_path(coord_dict, window_size=5): 
     frames = sorted(coord_dict.keys())
     smoothed_coords = {}
@@ -130,14 +168,33 @@ def smooth_path(coord_dict, window_size=5):
         smoothed_coords[frames[i]] = (avg_x, avg_y)
     return smoothed_coords
 
-def map_value(x): #
+def map_value(x):
     return max(0.5, min(1, 1 - (x - 100) / 100))
 
 def map_value2(x):
     return 1 if x > 30 else 1 + (30 - x) / 30
 
+def map_value3(x):
+    return max(0.5, min(1, 1 - (x - 150) / 150))
+
+def draw_text_list(image, text_list, position=(10, -10), font=cv2.FONT_HERSHEY_SIMPLEX, font_scale=1, color=(0, 0, 0), thickness=2, line_spacing=30):
+    h, w, _ = image.shape
+    x, y = position
+    y = h + y if y < 0 else y
+    for i, text in enumerate(reversed(text_list)):  # Reverse to stack bottom-up
+        text_y = y - (i * line_spacing)
+        cv2.putText(image, str(text_list[text]), (x, text_y), font, font_scale, color, thickness)
+
+def put_text_top_right(image, text, font=cv2.FONT_HERSHEY_SIMPLEX, font_scale=1, color=(0, 0, 0), thickness=2):
+    cv2.putText(image, str(text), (image.shape[1] - cv2.getTextSize(str(text), font, font_scale, thickness)[0][0] - 10, cv2.getTextSize(str(text), font, font_scale, thickness)[0][1] + 10), font, font_scale, color, thickness)
+
+def put_text_top_left(image, text, font=cv2.FONT_HERSHEY_SIMPLEX, font_scale=1, color=(0, 0, 0), thickness=2):
+    cv2.putText(image, str(text), (10, cv2.getTextSize(str(text), font, font_scale, thickness)[0][1] + 10), font, font_scale, color, thickness)
+
+def linear_distance(cord1, cord2):
+    return abs(cord1[0]-cord2[0]) + abs(cord2[1]- cord2[1])
+
 #-------Main function------
-scriptdir = os.path.dirname(os.path.abspath(__file__))
 cap = cv2.VideoCapture(scriptdir+"/../Captures/finals_1.mp4")
 cap.set(cv2.CAP_PROP_POS_MSEC, 8000)
 
@@ -146,6 +203,20 @@ for robot in robots:
     robot.cords = smooth_path(robot.cords, window_size=5)
     robot.cord = robot.cords[min(robot.cords)]
 scorings = {}
+intakes = {}
+
+fieldelements = {
+    "blue": {
+        "reef":(348, 318),
+        "source1":(20, 0),
+        "source2":(20, 632)
+    },
+    "red": {
+        "reef":(1029, 320),
+        "source1":(1360, 0),
+        "source2":(1360, 632)
+    }
+}
 
 while True:    
     ret, video = cap.read()
@@ -154,39 +225,65 @@ while True:
     frame_number = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
 
     field = cv2.imread("/Users/colinhaine/Desktop/yolo-env/comptracker/top-down.png")
-    cv2.circle(field, (348, 318), 150, (0,0,0), 1) #help out with visuals
+
+    cv2.circle(field, (348, 318), 140, (0,0,0), 1) #reef outer size
+    cv2.circle(field, (0, 632), 20, (0,0,0), -1)
     for robot in robots:
         if frame_number in robot.cords:
             robot.cord = robot.cords[frame_number]
         
-        distance = math.dist(robot.cord, (348, 318))
+        
+        #calculate distance to reef
 
-        #calculate distance
+        reef_dist = math.dist(robot.cord, fieldelements[robot.color]['reef'])
         if robot.scoring:
-            if distance < 150: #update with a higher if
-                if map_value(distance) > scorings[robot.scoring].distance_conf:
-                    scorings[robot.scoring].distance_conf = map_value(distance)
+            if reef_dist < 200: #distane to leave
+                if map_value(reef_dist) > scorings[robot.scoring].d_conf:
+                    scorings[robot.scoring].d_conf = map_value(reef_dist)
                     scorings[robot.scoring].time = frame_number
+
+
                 #tuple(round(c * 0.6) for c in COLORS[str(robot.id)])
-                cv2.circle(field, robot.cord, int(map_value(distance)*20), (0, 0, 0), 2)
+                # cv2.circle(field, robot.cord, int(map_value(reef_dist)*20), (0, 0, 0), 2)
             else:
                 robot.scoring = None
-        elif distance < 150: #inidiate a new one
-            if robot.scoring == None:
-                scoringid = len(scorings)+1
-                robot.scoring = scoringid
-                scorings[scoringid] = ScoringInstance(frame_number, coral_conf=robot.coral, distance_conf=0.5, m_conf=1, score_conf=1)
-                print('scored?')
+        elif reef_dist < 140: #inidiate a new one
+            scoringid = len(scorings)+1
+            robot.scoring = scoringid
+            scorings[scoringid] = ScoringInstance(frame_number, coral_conf=robot.coral, d_conf=0.5, m_conf=1, score_conf=1, color=robot.color)
+            
+            if robot.coral > 0.5:
+                robot.cycles += 1
+                robot.coral = 0
+            
+
+
+        #calculate distance to source
+        source_dist = min(linear_distance(robot.cord, fieldelements[robot.color]['source1']), linear_distance(robot.cord, fieldelements[robot.color]['source2']))
+        if robot.intaking:
+            if source_dist < 180:
+                if map_value3(source_dist) > intakes[robot.intaking].d_conf:
+                    intakes[robot.intaking].d_conf = map_value3(source_dist)
+                    intakes[robot.intaking].time = frame_number
+                    robot.coral = map_value3(source_dist)
+                cv2.circle(field, robot.cord, int(map_value(source_dist)*20), (0, 0, 0), 2)
+            else:
+                robot.intaking = None
+        elif source_dist < 170:
+            intakingid = len(intakes)
+            robot.intaking = intakingid
+            intakes[intakingid] = IntakeIntance(frame_number, d_conf=map_value3(source_dist), m_conf=1, color=robot.color)
 
         #calculate movement
         if frame_number-1 in robot.cords:
             robot.movement.append(math.dist(robot.cord, robot.cords[frame_number-1]))
-            if len(robot.movement) > 10:
+            if len(robot.movement) > 15:
                 robot.movement.pop(0)
         recent_movement = map_value2(sum(robot.movement))
         if robot.scoring:
             if recent_movement > scorings[robot.scoring].m_conf:
                 scorings[robot.scoring].m_conf = recent_movement
+
 
         #make the paths
         if len(robot.cords) > 1:  
@@ -194,13 +291,25 @@ while True:
             for i in range(len(sorted_frames) - 1):
                 frame1, frame2 = sorted_frames[i], sorted_frames[i + 1]
                 cv2.line(field, robot.cords[frame1], robot.cords[frame2], COLORS[str(robot.id)], 2)
-    
-    for robot in robots:
+
         cv2.circle(field, robot.cord, 10, tuple(round(c * 0.6) for c in COLORS[str(robot.id)]), -1)
-        if robot.scoring:
-            cv2.putText(field, f"{round(scorings[robot.scoring].get_total_conf(), 2)}", robot.cord, 0, 1, (0, 0, 0), 3)
+        cv2.putText(field, f"{robot.id}{robot.color}|{robot.cycles}|{robot.coral}", robot.cord, 0, 1, (0, 0, 0), 3)
+        # if robot.intaking:
+        #     cv2.putText(field, f"{round(intakes[robot.intaking].d_conf, 2)}", robot.cord, 0, 1, (0, 0, 0), 3)
+        # if robot.scoring:
+        #     cv2.putText(field, f"{round(scorings[robot.scoring].get_total_conf(), 2)}", robot.cord, 0, 1, (0, 0, 0), 3)
+            # f"{round(scorings[robot.scoring].get_total_conf(), 2)}"
     
-    cv2.imshow('video', video)
+    if frame_number in matchdata['blue']['increments']:
+        pass
+
+
+    if REPLAY:
+        cv2.imshow('video', video)
+    
+    # draw_text_list(field, scorings)
+    put_text_top_left(field, f"{matchdata['key']}")
     cv2.imshow('paths', field)
+    
     if cv2.waitKey(1) == 27:
         break

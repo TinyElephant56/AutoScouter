@@ -6,8 +6,10 @@ import cv2
 import numpy as np
 
 # Load the image
-image = cv2.imread("frame_24.jpg")
+image = cv2.imread("top-down.png")
 h, w, _ = image.shape
+
+print(h, w)
 margin = 100  # Margin around the image
 
 # Create a new larger image with padding

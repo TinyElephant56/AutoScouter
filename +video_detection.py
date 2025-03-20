@@ -17,6 +17,13 @@ import os
 scriptdir = os.path.dirname(os.path.abspath(__file__))
 print(f"{scriptdir}")
 
+print("gettin match data...")
+with open (f'{scriptdir}/+current.txt') as file:
+    key = file.read()
+
+with open (f'{scriptdir}/{key}_data.json') as file:
+    data = json.load(file)
+
 cap = cv2.VideoCapture(scriptdir+"/../Captures/finals_1.mp4")
 cap.set(cv2.CAP_PROP_POS_MSEC, 8000)
 
@@ -25,13 +32,16 @@ field_reference = cv2.imread(scriptdir+"/top-down.png")
 #---toggle number detection---
 TEXT_DETECTION = False #unfinished, broken rn
 #---way faster when its off---
+
 options = {
-    "blue": ['5026', '6060', '3863'],
-    "red": ['971', '4079', '589']
+    "blue": [x[3:] for x in data['blue']['numbers']],
+    "red": [x[3:] for x in data['red']['numbers']]
 }
+
+print(options)
 MATCH_THRESHOLD = 50
 
-GROUP_DISTANCE = 100
+GROUP_DISTANCE = 60
 
 # some constants:
 COLORS = {"red": (0, 0, 255), "blue": (255, 0, 0), "grey": (128, 128, 128), "dull-red": (204, 211, 237), "dull-blue": (224, 215, 215)}
@@ -78,6 +88,18 @@ class Detection:
         self.number = number
         self.type = type
 
+class Path:
+    def __init__(self, init_time, last_time, color, last_cord, cords):
+        self.init_time = init_time
+        self.last_time = last_time
+        self.color = color
+        self.last_cord = last_cord
+        self.cords = cords
+    def __str__(self):
+        return str([0, self.init_time, self.color, 0, self.cords], )
+        #path: [0:id, 1:init_frame, 2: color, 3: conf, 4:list of cords and times]
+
+        
 if PAUSE:
     cv2.imshow("top down view", field_reference)
     ret, frame = cap.read()
@@ -99,8 +121,6 @@ while True:
     confidences = np.array(result.boxes.conf.cpu())
     classes = np.array(result.boxes.cls.cpu(), dtype="int")
     detections = []
-    # each item in robots is a detection.
-    # [0: id, 1: center cord, 2: color, 3: confidence, 4: bbox top-left, 5: bbox bottom-right, 6: detected number, 7: type]
 
     id = 0
     for cls, bbox, conf in zip(classes, bboxes, confidences):
@@ -115,30 +135,7 @@ while True:
                 detections.append(Detection(id, cord, "red", conf, (x1, y1), (x2, y2), "", "-"))
         id += 1
     
-    if TEXT_DETECTION: ## OLD NOT UPDATED FOR DETECTION OBJECT
-        for i in range(len(detections)):
-            x1, y1, x2, y2 = detections[i][4][0], detections[i][4][1]+5, detections[i][5][0], detections[i][5][1]+5
-            searchbox = frame[y1:y2, x1:x2]
 
-            # do some processing to detect numbers better
-            searchbox = cv2.cvtColor(searchbox, cv2.COLOR_BGR2GRAY)
-            gaussian = cv2.GaussianBlur(searchbox, (3, 3), 0)
-            searchbox = cv2.addWeighted(searchbox, 2.0, gaussian, -1.0, 0)
-            searchbox = cv2.resize(searchbox, None, fx=2, fy=2, interpolation=cv2.INTER_LANCZOS4)
-
-            text = reader.readtext(searchbox, detail=0, allowlist="0123456789") 
-            #it tries to fuzz, but its really bad at reading the numbers right now
-            if text:
-                text = max(text, key=len)
-                fuzzed = process.extractOne(text, options[detections[i][2]], scorer=fuzz.ratio)
-                if fuzzed[1] > MATCH_THRESHOLD:
-                    print(fuzzed[0])
-                    detections[i][6] = "!"+ str(fuzzed[0])
-                else:
-                    detections[i][6] = "X" + text
-            cv2.putText(frame, f"{detections[i][6]}", (x1, y1 - 5), 0, 1, (255, 255, 255), 3)
-        
-    #turn the coordinate into the top down view
     for i in range(len(detections)):
         cord = detections[i].cord
         point = np.array([[cord]], dtype="float32")
@@ -162,8 +159,24 @@ while True:
             cv2.circle(field, detection.cord, 20, COLORS["dull-"+detection.color], -1)   
         cv2.putText(field, f"{detection.number}", detection.cord, 0, 1, (0, 0, 0), round(detection.conf * 5))
     
-    #--- d is cleaned up distance ---
+    #--- match up side to side ---
     d = detections.copy() 
+    # remove duplicate detections
+    i = 0
+    while i < len(d) - 1:
+        j = i + 1
+        while j < len(d):
+            if math.dist(d[i].cord, d[j].cord) < 40 and d[i].type == d[j].type:
+                if d[i].conf < d[j].conf:
+                    d.pop(i)
+                    i -= 1  
+                    break 
+                else:
+                    d.pop(j)  
+            else:
+                j += 1  
+        i += 1  
+
     while len(d) >= 2:
         shortest = GROUP_DISTANCE #try to beat this distance
         best_pair = None
@@ -180,24 +193,11 @@ while True:
             d.append(Detection((i.id * 100 + j.id), midpoint, i.color, (i.conf + j.conf), i.bbox1, i.bbox2, i.number, 'midpoint'))
 
             for k in d[:]:
-                if math.dist(midpoint, k.cord) < 80 and k.type != 'midpoint' and k.color == i.color:
+                if math.dist(midpoint, k.cord) < GROUP_DISTANCE+1 and k.type != 'midpoint' and k.color == i.color:
                     d.remove(k)
         else:
             break
-    i = 0
-    while i < len(d) - 1:
-        j = i + 1
-        while j < len(d):
-            if math.dist(d[i].cord, d[j].cord) < 40:
-                if d[i].conf < d[j].conf:
-                    d.pop(i)  # Remove the lower-confidence detection
-                    i -= 1  # Step back to recheck the new d[i]
-                    break  # Restart checking from the current i
-                else:
-                    d.pop(j)  # Remove d[j] since it has lower confidence
-            else:
-                j += 1  
-        i += 1  
+    
     
     # --- graph the cleaned up robot positions---
     for robot in d:
@@ -205,49 +205,71 @@ while True:
         cv2.putText
 
     # --- path detecting goes here ---
-    #path: [0:id, 1:init_frame, 2: color, 3: conf, 4:list of cords and times]
-    for path in archived_paths:
-        past = path[4]
-        color = path[2]
-        if len(past) > 1:  # Ensure there are at least two points
-            sorted_frames = sorted(past.keys())  # Sort the frame numbers
-            for i in range(len(sorted_frames) - 1):
-                frame1, frame2 = sorted_frames[i], sorted_frames[i + 1]
-                cv2.line(field, past[frame1], past[frame2], COLORS["dull-"+color], 2)
-        
-    for path in active_paths[:]:
-        color = path[2]
-        confidence = path[3]
-        past = path[4]
-        last_frame = max(past)
-        last_cord = past[max(past)]
-        
-        closest = 100
-        best_robot = None
-        for robot in d:
-            if math.dist(last_cord, robot.cord) < closest and color == robot.color:
-                best_robot = robot
-        
-        if best_robot:
-            best_cord = best_robot.cord
-            past[frame_number] = best_cord
-            confidence += best_robot.conf
-            d.remove(best_robot)
-            active_paths[active_paths.index(path)][3] = confidence
-            active_paths[active_paths.index(path)][4] = past
-        elif frame_number - last_frame > 8: # <- here
+    distances = []
+    for detection in d:
+        for path in active_paths:
+            distance = math.dist(path.last_cord, detection.cord)
+            if distance < 150 and path.color == detection.color: #<- here
+                distances.append((distance, detection, path))
+    distances = sorted(distances, key=lambda x: x[0])
+
+    for distance, detection, path in distances:
+        if detection in d and path in active_paths and frame_number not in path.cords:
+            path.cords[frame_number] = detection.cord
+            path.last_cord = detection.cord
+            path.last_time = frame_number
+            d.remove(detection)
+
+    for path in active_paths:
+        #kill off old paths
+        if frame_number - path.last_time > min(12, len(path.cords)+1):
             archived_paths.append(path)
             active_paths.remove(path)
-        if len(past) > 1:  
-            sorted_frames = sorted(past.keys()) 
+        
+    for detection in d: #start new paths
+        active_paths.append(Path(frame_number, frame_number, detection.color, detection.cord, { frame_number:detection.cord } ))
+    
+    for path in archived_paths:
+        if len(path.cords) > 1:  # Ensure there are at least two points
+            sorted_frames = sorted(path.cords.keys())  # Sort the frame numbers
             for i in range(len(sorted_frames) - 1):
                 frame1, frame2 = sorted_frames[i], sorted_frames[i + 1]
-                cv2.line(field, past[frame1], past[frame2], COLORS[color], 2)
+                cv2.line(field, path.cords[frame1], path.cords[frame2], COLORS["dull-"+path.color], 2)
+    
+    for path in active_paths:
+        if len(path.cords) > 1:  # Ensure there are at least two points
+            sorted_frames = sorted(path.cords.keys())  # Sort the frame numbers
+            for i in range(len(sorted_frames) - 1):
+                frame1, frame2 = sorted_frames[i], sorted_frames[i + 1]
+                cv2.line(field, path.cords[frame1], path.cords[frame2], COLORS[path.color], 2)
+        cv2.circle(field, path.last_cord, 10, (0, 0, 0), 2)
 
-    for robot in d: #start new paths
-        active_paths.append([path_id, frame_number, robot.color, robot.conf, { frame_number:robot.cord } ])
-        path_id += 1
 
+
+    if TEXT_DETECTION: ## OLD NOT UPDATED FOR DETECTION OBJECT
+        for detection in detections:
+            x1, y1 = detection.bbox1
+            x2, y2 = detection.bbox2
+            searchbox = frame[y1:y2, x1:x2]
+
+            # do some processing to detect numbers better
+            searchbox = cv2.cvtColor(searchbox, cv2.COLOR_BGR2GRAY)
+            gaussian = cv2.GaussianBlur(searchbox, (3, 3), 0)
+            searchbox = cv2.addWeighted(searchbox, 2.0, gaussian, -1.0, 0)
+            searchbox = cv2.resize(searchbox, None, fx=2, fy=2, interpolation=cv2.INTER_LANCZOS4)
+
+            text = reader.readtext(searchbox, detail=0, allowlist="0123456789") 
+            #it tries to fuzz, but its really bad at reading the numbers right now
+            if text:
+                text = max(text, key=len)
+                fuzzed = process.extractOne(text, options[detections[i][2]], scorer=fuzz.ratio)
+                if fuzzed[1] > MATCH_THRESHOLD:
+                    print(fuzzed[0])
+                    detections[i][6] = "!"+ str(fuzzed[0])
+                else:
+                    detections[i][6] = "X" + text
+            cv2.putText(frame, f"{detections[i][6]}", (x1, y1 - 5), 0, 1, (255, 255, 255), 3)
+        
     # --- graph the corners ---
     for corners in [fullframecorners, leftframecorners, rightframecorners]:
         for corner in corners:
@@ -256,7 +278,6 @@ while True:
         for corner in corners:
             cv2.circle(field, (corner[0], corner[1]), 10, (0, 255, 0), -1)
 
-    cv2.circle(field, (300, 300), 40, COLORS["grey"], 2)
     cv2.imshow("top down view", field)
     cv2.imshow("video", frame)
 
@@ -268,8 +289,11 @@ cap.release()
 cv2.destroyAllWindows()
 
 archived_paths += active_paths
-
-if input("save paths to output.txt? [y/n]") == 'y':
+output = '['
+for path in archived_paths:
+    output += str(path)+", "
+output += ']'
+if input("save paths to +output.txt? [y/n]") == 'y':
     with open ('+output.txt', 'w') as file:
-        file.write(str(archived_paths))
+        file.write(output)
     print(frame_number)
