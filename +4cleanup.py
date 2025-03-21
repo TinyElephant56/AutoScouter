@@ -20,7 +20,7 @@ paths = ast.literal_eval(dump)
 with open(f'{scriptdir}/{key}_data.json', 'r') as file:
     matchdata = json.load(file)
 
-COLORS = {"0": (0, 0, 255), "1": (0, 255, 255), "2": (0, 255, 0), "3": (255, 255, 0), "4": (255, 0, 0), "5": (255, 0, 255)}
+COLORS = {"0": (255, 255, 0), "1": (0, 255, 255), "2": (0, 127, 255), "3": (0, 0, 255), "4": (255, 0, 0), "5": (255, 0, 255)}
 robots = []
 
 LIVE = True #show the paths being matched up to robots or not
@@ -79,7 +79,7 @@ end_frame = 0
 #turn paths into objects
 for path in paths:
     c = path[4]
-    if len(c) > 10:
+    if len(c) > 20:
         simplified_paths.append(Path(color=path[2], number=path[3], start=min(c), startcord=c[min(c)], end=max(c), endcord=c[max(c)], cords=c))
         if min(c) < start_frame:
             start_frame = min(c)
@@ -110,7 +110,8 @@ while frame_number < end_frame:
                 robots.append(Robot(len(robots), path.startcord, path.color, path.number, path.cords, True))
             else:
                 # print(f"missed {path.color} length {len(path.cords)}")
-                missed_paths.append(path)
+                # if path.number:
+                    missed_paths.append(path)
     
     for path in missed_paths[:]:
         closest = FOLLOW_DISTANCE
@@ -200,7 +201,7 @@ def linear_distance(cord1, cord2):
     return abs(cord1[0]-cord2[0]) + abs(cord2[1]- cord2[1])
 
 #-------Main function------
-cap = cv2.VideoCapture(scriptdir+"/../Captures/finals_1.mp4")
+cap = cv2.VideoCapture(scriptdir+f"/../Captures/{key}.mp4")
 
 #setup
 for robot in robots: 
@@ -223,7 +224,13 @@ fieldelements = {
 }
 
 print('replaying and counting cycles')
-if VISUAL: print('press esc to skip')
+if VISUAL:
+    print('press esc to skip')
+    # cv2.imshow("paths", video)
+    # ret, frame = cap.read()
+    # cv2.imshow("video", video)
+    # cv2.waitKey(0)
+
 cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
 frame_number = start_frame
 while frame_number < end_frame:
@@ -286,10 +293,10 @@ while frame_number < end_frame:
             if len(robot.cords) > 1:  
                 sorted_frames = sorted(robot.cords.keys()) 
                 for i in range(len(sorted_frames) - 1):
-                    frame1, frame2 = sorted_frames[i], sorted_frames[i + 1]
-                    cv2.line(field, robot.cords[frame1], robot.cords[frame2], COLORS[str(robot.id)], 2)
-            cv2.circle(field, robot.cord, 10, tuple(round(c * 0.6) for c in COLORS[str(robot.id)]), -1)
-            cv2.putText(field, f"{robot.number}|{robot.cycles}", robot.cord, 0, 1, (0, 0, 0), 3)
+                    if sorted_frames[i] < frame_number: #now it looks cool
+                        frame1, frame2 = sorted_frames[i], sorted_frames[i + 1]
+                        cv2.line(field, robot.cords[frame1], robot.cords[frame2], COLORS[str(robot.id)], 2)
+            
             # if robot.intaking:
             #     cv2.putText(field, f"{round(intakes[robot.intaking].d_conf, 2)}", robot.cord, 0, 1, (0, 0, 0), 3)
             # if robot.scoring:
@@ -297,7 +304,11 @@ while frame_number < end_frame:
                 # f"{round(scorings[robot.scoring].get_total_conf(), 2)}"
         
     if VISUAL:
+        for robot in robots:
+            cv2.circle(field, robot.cord, 20, tuple(round(c * 0.6) for c in COLORS[str(robot.id)]), -1)
+            cv2.putText(field, f"{robot.number} | {robot.cycles}", robot.cord, 0, 1, (0, 0, 0), 3)
         # draw_text_list(field, scorings)
+        put_text_top_right(field, str(frame_number))
         put_text_top_left(field, f"{matchdata['key']}")
         cv2.imshow('video', video)
         cv2.imshow('paths', field)

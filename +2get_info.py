@@ -9,7 +9,10 @@ scriptdir = os.path.dirname(os.path.abspath(__file__))
 
 print(f"loading detection...")
 
-cap = cv2.VideoCapture(scriptdir+"/../Captures/finals_1.mp4")
+with open(f'{scriptdir}/+current.txt', 'r') as file:
+    key = file.read()
+
+cap = cv2.VideoCapture(scriptdir+f"/../Captures/{key}.mp4")
 frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 print(f"frames: {frame_count}, fps: {cap.get(cv2.CAP_PROP_FPS)}")
 # cap.set(cv2.CAP_PROP_POS_MSEC, 8000)
@@ -27,7 +30,7 @@ def detect_numbers(image, search):
 
 # --- get TBA info----
 token = 'Fz3O8X9BRqJT8XeIs1Rcnl6rSy65NbbajU2e2V18Gc9m4vi7rG2o5QnwPUulcpz7'
-url = 'https://www.thebluealliance.com/api/v3/match/2025cave_f1m1'
+url = f'https://www.thebluealliance.com/api/v3/match/{key}'
 headers = { 
     "X-TBA-Auth-Key": token
 }
@@ -36,6 +39,7 @@ response = requests.get(url, headers=headers)
 if response.status_code == 200:
     data = response.json()  # Parse JSON response
     print(f"got TBA data for key {data['event_key']}")
+    print(data)
 else:
     print(f"Error: {response.status_code} - {response.text}")
 
@@ -46,43 +50,43 @@ blueresults = {}
 redresults = {}
 
 #-----Main loop:get numbers increments from video
-print('detecting...')
-started = False
-while True:    
-    ret, frame = cap.read()
-    if not ret:
-        break
-    frame_number = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
-    # print(frame_number)
+# print('detecting...')
+# started = False
+# while True:    
+#     ret, frame = cap.read()
+#     if not ret:
+#         break
+#     frame_number = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
+#     # print(frame_number)
     
-    if not started:
-        h = detect_numbers(frame, timesearch)
-        if h and h != ['0:00']:
-            started = True
-            start_frame = frame_number
-            print(f"started at frame {start_frame} with {'0:00'}")
+#     if not started:
+#         h = detect_numbers(frame, timesearch)
+#         if h and h != ['0:00']:
+#             started = True
+#             start_frame = frame_number
+#             print(f"started at frame {start_frame} with {'0:00'}")
 
-    if started and frame_number%2 == 0: #speedy
-        score = detect_numbers(frame, bluesearch)
-        if len(score) > 0:
-            score = int(score[0])
-            if score != bluescore:
-                blueresults[frame_number] = score-bluescore
-                print(f"[blue {frame_number}: +{score-bluescore}]")
-                bluescore = score
+#     if started and frame_number%2 == 0: #speedy
+#         score = detect_numbers(frame, bluesearch)
+#         if len(score) > 0:
+#             score = int(score[0])
+#             if score != bluescore:
+#                 blueresults[frame_number] = score-bluescore
+#                 print(f"[blue {frame_number}: +{score-bluescore}]")
+#                 bluescore = score
 
-        score = detect_numbers(frame, redsearch)
-        if len(score) > 0:
-            score = int(score[0])
-            if score != redscore:
-                redresults[frame_number] = score-redscore
-                print(f"[red {frame_number}: +{score-redscore}]")
-                redscore = score
+#         score = detect_numbers(frame, redsearch)
+#         if len(score) > 0:
+#             score = int(score[0])
+#             if score != redscore:
+#                 redresults[frame_number] = score-redscore
+#                 print(f"[red {frame_number}: +{score-redscore}]")
+#                 redscore = score
 
+    # 'startTime': start_frame,
+    # 'teleTime': start_frame + 480,
 formatted = {
     'key':data['key'],
-    'startTime': start_frame,
-    'teleTime': start_frame + 480,
     'blue': {
         'numbers': data['alliances']['blue']['team_keys'],
         'score':data['score_breakdown']['blue']['wallAlgaeCount'],

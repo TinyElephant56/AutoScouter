@@ -24,7 +24,7 @@ with open (f'{scriptdir}/+current.txt') as file:
 with open (f'{scriptdir}/{key}_data.json') as file:
     data = json.load(file)
 
-cap = cv2.VideoCapture(scriptdir+"/../Captures/finals_1.mp4")
+cap = cv2.VideoCapture(scriptdir+f"/../Captures/{key}.mp4")
 cap.set(cv2.CAP_PROP_POS_MSEC, 8000)
 
 field_reference = cv2.imread(scriptdir+"/top-down.png")
@@ -37,7 +37,7 @@ options = {
 print(options)
 MATCH_THRESHOLD = 50
 
-GROUP_DISTANCE = 60
+GROUP_DISTANCE = 90
 
 # some constants:
 COLORS = {"red": (0, 0, 255), "blue": (255, 0, 0), "grey": (128, 128, 128), "dull-red": (204, 211, 237), "dull-blue": (224, 215, 215)}
@@ -141,28 +141,29 @@ while True:
         cord = (int((x1 + x2) / 2), int((y1 + y2) / 2)) #get the center of the bounding box (bbox)
         if conf > CONFIDENCE_THRESHOLD:
             if cls == 0:
-                cv2.circle(frame, (int((x1+x2)/2), int((y2-y1)*0.6+y1)), 20, COLORS["blue"], 5)
+                # cv2.circle(frame, (int((x1+x2)/2), int((y2-y1)*0.6+y1)), 20, COLORS["blue"], 5)
                 detections.append(Detection(id, cord, "blue", conf, (x1, y1), (x2, y2), "", "-"))
             elif cls == 1:
-                cv2.circle(frame, (int((x1+x2)/2), int((y2-y1)*0.6+y1)), 20, COLORS["red"], 5)
+                # cv2.circle(frame, (int((x1+x2)/2), int((y2-y1)*0.6+y1)), 20, COLORS["red"], 5)
                 detections.append(Detection(id, cord, "red", conf, (x1, y1), (x2, y2), "", "-"))
         id += 1
     
 
-    for i in range(len(detections)):
-        cord = detections[i].cord
+    for detection in detections:
+        cv2.rectangle(frame, detection.bbox1, detection.bbox2, COLORS[detection.color], 3, 1)
+        cord = detection.cord
         point = np.array([[cord]], dtype="float32")
         if cord[1] < 644:  # detections in the top full field camera
             transformed_x, transformed_y = map(int, cv2.perspectiveTransform(point, fullmatrix)[0][0])
-            detections[i].type = "top"
+            detection.type = "top"
         else:
             if cord[0] < 959:  # detections in the left field camera
                 transformed_x, transformed_y = map(int, cv2.perspectiveTransform(point, leftmatrix)[0][0])
-                detections[i].type = "side"
+                detection.type = "side"
             else:  # detections in the right field camera
                 transformed_x, transformed_y = map(int, cv2.perspectiveTransform(point, rightmatrix)[0][0])
-                detections[i].type = "side"
-        detections[i].cord = (transformed_x, transformed_y)
+                detection.type = "side"
+        detection.cord = (transformed_x, transformed_y)
     
     #--- graph it ---
     for detection in detections:
@@ -205,7 +206,7 @@ while True:
             d.append(Detection((i.id * 100 + j.id), midpoint, i.color, (i.conf + j.conf), i.bbox1, i.bbox2, i.number, 'midpoint'))
 
             for k in d[:]:
-                if math.dist(midpoint, k.cord) < GROUP_DISTANCE+1 and k.type != 'midpoint' and k.color == i.color:
+                if math.dist(midpoint, k.cord) < shortest+1 and k.type != 'midpoint' and k.color == i.color:
                     d.remove(k)
         else:
             break
@@ -242,7 +243,7 @@ while True:
                         path.number = fuzzed[0]
                     else:
                         print(f"{detection.color} {text}, looks most like {fuzzed[0]}, conf {fuzzed[1]}")
-                cv2.rectangle(frame, detection.bbox1, detection.bbox2, COLORS[detection.color], 3, 1)
+                # cv2.rectangle(frame, detection.bbox1, detection.bbox2, COLORS[detection.color], 3, 1)
 
             d.remove(detection)
 
@@ -270,7 +271,8 @@ while True:
                 frame1, frame2 = sorted_frames[i], sorted_frames[i + 1]
                 cv2.line(field, path.cords[frame1], path.cords[frame2], COLORS[path.color], 2)
         cv2.circle(field, path.last_cord, 10, (0, 0, 0), 2)
-        cv2.putText(field, f"{path.number}", path.last_cord, 0, 1, (0, 0, 0), 3)
+        if path.number:
+            cv2.putText(field, f"{path.number}", path.last_cord, 0, 1, (0, 0, 0), 3)
 
 
     # --- graph the corners ---
@@ -297,7 +299,7 @@ for path in archived_paths:
     output += str(path)+", "
 output += ']'
 
-if input("save paths to +output.txt? [y/n]") == 'y':
-    with open (f'{scriptdir}/{key}_paths.txt', 'w') as file:
-        file.write(output)
-    print(frame_number)
+# if input("save paths to +output.txt? [y/n]") == 'y':
+with open (f'{scriptdir}/{key}_paths.txt', 'w') as file:
+    file.write(output)
+print(frame_number)

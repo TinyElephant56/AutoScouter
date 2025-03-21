@@ -11,6 +11,7 @@ import argparse
 import sys
 import signal
 from moviepy import VideoFileClip
+scriptdir = os.path.dirname(os.path.abspath(__file__))
 
 # Argument parser setup
 parser = argparse.ArgumentParser(description="Twitch Stream Capture Tool")
@@ -32,24 +33,26 @@ else:
     logging.disable(logging.CRITICAL)
 
 # Ensure that Captures and Logs directories exist
-os.makedirs("Captures", exist_ok=True)
-os.makedirs("Logs", exist_ok=True)
+# os.makedirs("Captures", exist_ok=True)
+# os.makedirs("Logs", exist_ok=True)
 
 # Clear the screen
 print("\033[2J\033[H", end="")
 
+with open(f"{scriptdir}/+current.txt") as file:
+    key = file.read()
 # Print welcome message with special formatting
-print("""\033[35m
-___        ___  __        ___          __        __  ___       __   ___ 
- |  |  | |  |  /  ` |__|   |  \  /    /  `  /\  |__)  |  |  | |__) |__  
- |  |/\| |  |  \__, |  | . |   \/     \__, /~~\ |     |  \__/ |  \ |___ 
+# print("""\033[35m
+# ___        ___  __        ___          __        __  ___       __   ___ 
+#  |  |  | |  |  /  ` |__|   |  \  /    /  `  /\  |__)  |  |  | |__) |__  
+#  |  |/\| |  |  \__, |  | . |   \/     \__, /~~\ |     |  \__/ |  \ |___ 
 
-not my code\033[0m
-""")
-
+# ----not my code---\033[0m
+# """)
+print(f"competition: {key}")
 # Prompt for streamer ID input
-streamer_id = input("start?").strip()
-streamer_id = "firstinspires4"
+name = input('match name: ')
+streamer_id = "firstinspires10"
 # firstinspires4
 
 
@@ -86,10 +89,7 @@ def calculate_video_stats(filename):
 
 # Function to download a Twitch stream using ffmpeg and save it to a file
 def download_stream(stream_url, channel_name, stop_event):
-    output_filename = os.path.join(
-        "Captures",
-        datetime.utcnow().strftime("%Y-%m-%d_%H-%M-%S") + "-" + channel_name + ".mp4",
-    )
+    output_filename = f"{scriptdir}/../Captures/{name}.mp4"
     log_filename = os.path.join(
         "Logs",
         datetime.utcnow().strftime("%Y-%m-%d_%H-%M-%S") + "-" + channel_name + ".log",

@@ -5,6 +5,8 @@ import random
 import os
 
 scriptdir = os.path.dirname(os.path.abspath(__file__))
+with open (f'{scriptdir}/+current.txt') as file:
+    key = file.read()
 
 url = input("youtube url: ")
 
@@ -18,4 +20,4 @@ def download_youtube_video(youtube_url, output_path="video.mp4"):
         ydl.download([youtube_url])
         print(f"Downloaded video to {output_path}")
 
-download_youtube_video(url, f'{scriptdir}/../Captures/{random.randint(0, 999999)}.mp4')
+download_youtube_video(url, f'{scriptdir}/../Captures/{key}.mp4')

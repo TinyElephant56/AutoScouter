@@ -6,6 +6,8 @@ import cv2
 import numpy as np
 
 # Load the image
+
+# image = cv2.imread("first_frame.jpg")
 image = cv2.imread("top-down.png")
 h, w, _ = image.shape
 
