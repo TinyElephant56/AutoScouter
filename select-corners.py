@@ -7,8 +7,8 @@ import numpy as np
 
 # Load the image
 
-# image = cv2.imread("first_frame.jpg")
-image = cv2.imread("top-down.png")
+image = cv2.imread("first_frame.jpg")
+# image = cv2.imread("top-down.png")
 h, w, _ = image.shape
 
 print(h, w)
@@ -32,6 +32,7 @@ def select_points(event, x, y, flags, param):
         cv2.imshow("Select Points", padded_image)
 
 # Display the padded image
+
 cv2.imshow("Select Points", padded_image)
 cv2.setMouseCallback("Select Points", select_points)
 

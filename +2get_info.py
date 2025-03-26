@@ -39,7 +39,6 @@ response = requests.get(url, headers=headers)
 if response.status_code == 200:
     data = response.json()  # Parse JSON response
     print(f"got TBA data for key {data['event_key']}")
-    print(data)
 else:
     print(f"Error: {response.status_code} - {response.text}")
 
@@ -50,21 +49,22 @@ blueresults = {}
 redresults = {}
 
 #-----Main loop:get numbers increments from video
-# print('detecting...')
-# started = False
-# while True:    
-#     ret, frame = cap.read()
-#     if not ret:
-#         break
-#     frame_number = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
-#     # print(frame_number)
+print('detecting...')
+started = False
+while True:    
+    ret, frame = cap.read()
+    if not ret:
+        break
+    frame_number = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
+    # print(frame_number)
     
-#     if not started:
-#         h = detect_numbers(frame, timesearch)
-#         if h and h != ['0:00']:
-#             started = True
-#             start_frame = frame_number
-#             print(f"started at frame {start_frame} with {'0:00'}")
+    if not started:
+        h = detect_numbers(frame, timesearch)
+        if h and h != ['0:00']:
+            started = True
+            start_frame = frame_number
+            print(f"started at frame {start_frame} with {'0:00'}")
+            break
 
 #     if started and frame_number%2 == 0: #speedy
 #         score = detect_numbers(frame, bluesearch)
@@ -83,9 +83,9 @@ redresults = {}
 #                 print(f"[red {frame_number}: +{score-redscore}]")
 #                 redscore = score
 
-    # 'startTime': start_frame,
     # 'teleTime': start_frame + 480,
 formatted = {
+    'startTime': start_frame,
     'key':data['key'],
     'blue': {
         'numbers': data['alliances']['blue']['team_keys'],

@@ -25,7 +25,7 @@ with open (f'{scriptdir}/{key}_data.json') as file:
     data = json.load(file)
 
 cap = cv2.VideoCapture(scriptdir+f"/../Captures/{key}.mp4")
-cap.set(cv2.CAP_PROP_POS_MSEC, 8000)
+cap.set(cv2.CAP_PROP_POS_FRAMES, data['startTime'])
 
 field_reference = cv2.imread(scriptdir+"/top-down.png")
 
@@ -124,6 +124,7 @@ while True:
     ret, frame = cap.read()
     if not ret:
         break
+    cv2.rectangle(frame, [403, 370], [511, 394], (0,0,0), -1)
 
     frame_number = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
     field = field_reference.copy()

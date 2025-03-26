@@ -7,8 +7,10 @@ import os
 scriptdir = os.path.dirname(os.path.abspath(__file__))
 with open (f'{scriptdir}/+current.txt') as file:
     key = file.read()
-
-url = input("youtube url: ")
+key = input("key? ")
+# key = '2025azgl_qm5'
+url = input(f"youtube url for {key}: ")
+# url= 'https://www.youtube.com/watch?v=aTGQDQjfzzs'
 
 def download_youtube_video(youtube_url, output_path="video.mp4"):
     ydl_opts = {

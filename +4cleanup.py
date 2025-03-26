@@ -23,7 +23,7 @@ with open(f'{scriptdir}/{key}_data.json', 'r') as file:
 COLORS = {"0": (255, 255, 0), "1": (0, 255, 255), "2": (0, 127, 255), "3": (0, 0, 255), "4": (255, 0, 0), "5": (255, 0, 255)}
 robots = []
 
-LIVE = True #show the paths being matched up to robots or not
+LIVE = False #show the paths being matched up to robots or not
 VISUAL = True #show the robot paths
 
 FOLLOW_DISTANCE = 200
@@ -87,7 +87,6 @@ for path in paths:
             end_frame = max(c)
     else:
         pass
-
 #---------preprocess----------
 missed_paths = []
 frame_number = start_frame
