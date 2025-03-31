@@ -15,19 +15,20 @@ import time
 import os
 
 scriptdir = os.path.dirname(os.path.abspath(__file__))
-print(f"{scriptdir}")
+with open (f'{scriptdir}/data/current.txt', 'r') as file:
+    key = file.read().strip()
+print(f"\033[32mAutoScout file 2 - AI track match video\033[0m")
+key = input(f"Match key:\033[34m [{key}] \033[0m") or key #look at this cool little trick!
+with open (f'{scriptdir}/data/current.txt', 'w') as file:
+    file.write(key)
 
-print("gettin match data...")
-with open (f'{scriptdir}/+current.txt') as file:
-    key = file.read()
-
-with open (f'{scriptdir}/{key}_data.json') as file:
+with open (f'{scriptdir}/matches/{key}/{key}_data.json') as file:
     data = json.load(file)
 
-cap = cv2.VideoCapture(scriptdir+f"/../Captures/{key}.mp4")
+cap = cv2.VideoCapture(f"{scriptdir}/matches/{key}/{key}.mp4")
 cap.set(cv2.CAP_PROP_POS_FRAMES, data['startTime'])
 
-field_reference = cv2.imread(scriptdir+"/top-down.png")
+field_reference = cv2.imread(f"{scriptdir}/data/top-down.png")
 
 options = {
     "blue": [x[3:] for x in data['blue']['numbers']],
@@ -44,11 +45,11 @@ COLORS = {"red": (0, 0, 255), "blue": (255, 0, 0), "grey": (128, 128, 128), "dul
 CONFIDENCE_THRESHOLD = 0.4
 
 print("setting up models...")
-model = YOLO(scriptdir+"/ventura-best-2.pt") #robot detection model
+model = YOLO(scriptdir+"/data/ventura-best-2.pt") #robot detection model
 
 reader = easyocr.Reader(['en'], recog_network='english_g2', user_network_directory=None) #text detection model
 
-allcorners = json.load(open(scriptdir+"/fieldcorners.json", 'r'))
+allcorners = json.load(open(f"{scriptdir}/data/fieldcorners.json", 'r'))
 # fieldcorners: the top down diagram
 fullfieldcorners = allcorners["fullfieldcorners"]
 leftfieldcorners = allcorners["leftfieldcorners"]
@@ -240,10 +241,10 @@ while True:
                     text = max(text, key=len)
                     fuzzed = process.extractOne(text, options[detection.color], scorer=fuzz.ratio)
                     if fuzzed[1] > 70:
-                        print(fuzzed[0])
                         path.number = fuzzed[0]
-                    else:
-                        print(f"{detection.color} {text}, looks most like {fuzzed[0]}, conf {fuzzed[1]}")
+                    #     print(fuzzed[0])
+                    # else:
+                    #     print(f"{detection.color} {text}, looks most like {fuzzed[0]}, conf {fuzzed[1]}")
                 # cv2.rectangle(frame, detection.bbox1, detection.bbox2, COLORS[detection.color], 3, 1)
 
             d.remove(detection)
@@ -290,7 +291,6 @@ while True:
     
     if cv2.waitKey(1) == 27:
          break
-print("stopped.")
 cap.release()
 cv2.destroyAllWindows()
 
@@ -301,6 +301,9 @@ for path in archived_paths:
 output += ']'
 
 # if input("save paths to +output.txt? [y/n]") == 'y':
-with open (f'{scriptdir}/{key}_paths.txt', 'w') as file:
+with open (f'{scriptdir}/matches/{key}/{key}_paths.txt', 'w') as file:
     file.write(output)
-print(frame_number)
+print(f"stopped at{frame_number}")
+print(f"Saved paths to \033[32m{scriptdir}/matches/{key}/{key}_paths.txt\033[0m")
+
+

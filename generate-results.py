@@ -9,15 +9,18 @@ import requests
 import csv
 
 scriptdir = os.path.dirname(os.path.abspath(__file__))
+with open (f'{scriptdir}/data/current.txt', 'r') as file:
+    key = file.read().strip()
+print(f"\033[32mAutoScout file 3 - count cycles and view match\033[0m")
+key = input(f"Match key:\033[34m [{key}] \033[0m") or key #look at this cool little trick!
+with open (f'{scriptdir}/data/current.txt', 'w') as file:
+    file.write(key)
 
-with open(f'{scriptdir}/current.txt', 'r') as file:
-    key = file.read()
-
-with open(f'{scriptdir}/{key}_paths.txt', 'r') as file:
+with open(f'{scriptdir}/matches/{key}/{key}_paths.txt', 'r') as file:
     dump = file.read()
 paths = ast.literal_eval(dump)
 
-with open(f'{scriptdir}/{key}_data.json', 'r') as file:
+with open(f'{scriptdir}/matches/{key}/{key}_data.json', 'r') as file:
     matchdata = json.load(file)
 
 COLORS = {"0": (255, 255, 0), "1": (0, 255, 255), "2": (0, 127, 255), "3": (0, 0, 255), "4": (255, 0, 0), "5": (255, 0, 255)}
@@ -60,10 +63,11 @@ class ScoringInstance:
         self.d_conf = d_conf
         self.m_conf = m_conf
         self.score_conf = score_conf
+        self.color = color
     def get_total_conf(self):
         return self.coral_conf * self.d_conf * self.m_conf * self.score_conf
     def __str__(self):
-        return f"{self.time}: {round(self.coral_conf, 2)}|{round(self.d_conf, 2)}|{round(self.m_conf)}|{round(self.score_conf)}"
+        return f"{self.color}{self.time}: {round(self.coral_conf, 2)}|{round(self.d_conf, 2)}|{round(self.m_conf)}|{round(self.score_conf)}"
 
 class IntakeIntance:
     def __init__(self, time, d_conf, m_conf, color):
@@ -130,7 +134,7 @@ while frame_number < end_frame:
 
     
     if LIVE:
-        field = cv2.imread("/Users/colinhaine/Desktop/yolo-env/comptracker/top-down.png")
+        field = cv2.imread(f"{scriptdir}/data/top-down.png")
     
     for robot in robots:
         if frame_number in robot.cords:
@@ -188,7 +192,19 @@ def draw_text_list(image, text_list, position=(10, -10), font=cv2.FONT_HERSHEY_S
     y = h + y if y < 0 else y
     for i, text in enumerate(reversed(text_list)):  # Reverse to stack bottom-up
         text_y = y - (i * line_spacing)
-        cv2.putText(image, str(text_list[text]), (x, text_y), font, font_scale, color, thickness)
+        cv2.putText(image, f"{text_list[text]}", (x, text_y), font, font_scale, color, thickness)
+
+def draw_text_list_bottom_right(image, text_list, position=(-10, -10), font=cv2.FONT_HERSHEY_SIMPLEX, font_scale=1, color=(0, 0, 0), thickness=2, line_spacing=30):
+    h, w, _ = image.shape
+    x, y = position
+    x = w + x if x < 0 else x  # Adjust x for right alignment
+    y = h + y if y < 0 else y  # Adjust y for bottom alignment
+    
+    for i, text in enumerate(reversed(text_list)):  # Reverse to stack bottom-up
+        text_size = cv2.getTextSize(text, font, font_scale, thickness)[0]
+        text_x = x - text_size[0]  # Align text to the right
+        text_y = y - (i * line_spacing)
+        cv2.putText(image, text, (text_x, text_y), font, font_scale, color, thickness)
 
 def put_text_top_right(image, text, font=cv2.FONT_HERSHEY_SIMPLEX, font_scale=1, color=(0, 0, 0), thickness=2):
     cv2.putText(image, str(text), (image.shape[1] - cv2.getTextSize(str(text), font, font_scale, thickness)[0][0] - 10, cv2.getTextSize(str(text), font, font_scale, thickness)[0][1] + 10), font, font_scale, color, thickness)
@@ -199,8 +215,14 @@ def put_text_top_left(image, text, font=cv2.FONT_HERSHEY_SIMPLEX, font_scale=1, 
 def linear_distance(cord1, cord2):
     return abs(cord1[0]-cord2[0]) + abs(cord2[1]- cord2[1])
 
+
+
+
+
+
+
 #-------Main function------
-cap = cv2.VideoCapture(scriptdir+f"/../Captures/{key}.mp4")
+cap = cv2.VideoCapture(f"{scriptdir}/matches/{key}/{key}.mp4")
 
 #setup
 for robot in robots: 
@@ -208,6 +230,7 @@ for robot in robots:
     robot.cord = robot.cords[min(robot.cords)]
 scorings = {}
 intakes = {}
+increments = []
 
 fieldelements = {
     "blue": {
@@ -232,12 +255,13 @@ if VISUAL:
 
 cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
 frame_number = start_frame
+
 while frame_number < end_frame:
     if VISUAL: 
         ret, video = cap.read()
         if not ret:
             break
-        field = cv2.imread("/Users/colinhaine/Desktop/yolo-env/comptracker/top-down.png")
+        field = cv2.imread(f"{scriptdir}/data/top-down.png")
 
     for robot in robots:
         if frame_number in robot.cords:
@@ -254,11 +278,11 @@ while frame_number < end_frame:
             else:
                 robot.scoring = None
         elif reef_dist < 140: #inidiate a new one
-            scoringid = len(scorings)+1
-            robot.scoring = scoringid
-            scorings[scoringid] = ScoringInstance(frame_number, coral_conf=robot.coral, d_conf=0.5, m_conf=1, score_conf=1, color=robot.color)
-            
             if robot.coral > 0.5:
+                scoringid = len(scorings)+1
+                robot.scoring = scoringid
+                scorings[scoringid] = ScoringInstance(frame_number, coral_conf=robot.coral, d_conf=0.5, m_conf=1, score_conf=1, color=robot.color)
+                
                 robot.cycles += 1
                 robot.coral = 0
 
@@ -301,23 +325,31 @@ while frame_number < end_frame:
             # if robot.scoring:
             #     cv2.putText(field, f"{round(scorings[robot.scoring].get_total_conf(), 2)}", robot.cord, 0, 1, (0, 0, 0), 3)
                 # f"{round(scorings[robot.scoring].get_total_conf(), 2)}"
-        
+    
+#asef
+    for color in ['blue', 'red']:
+        if str(frame_number) in matchdata[color]['increments']:
+            increments.append(frame_number)
+            print(frame_number)
     if VISUAL:
         for robot in robots:
             cv2.circle(field, robot.cord, 20, tuple(round(c * 0.6) for c in COLORS[str(robot.id)]), -1)
             cv2.putText(field, f"{robot.number} | {robot.cycles}", robot.cord, 0, 1, (0, 0, 0), 3)
-        # draw_text_list(field, scorings)
+
+        draw_text_list(field, scorings)
+        draw_text_list_bottom_right(field, increments)
         put_text_top_right(field, str(frame_number))
         put_text_top_left(field, f"{matchdata['key']}")
         cv2.imshow('video', video)
         cv2.imshow('paths', field)
         if cv2.waitKey(1) == 27:
             VISUAL=False
+            print('skipping')
 
     frame_number += 1
 
-print(f"writing to {scriptdir}/{key}_cycles.csv")
-with open(f"{scriptdir}/{key}_cycles.csv", mode='w', newline='') as file:
+print(f"writing to {scriptdir}/matches/{key}/{key}_cycles.csv")
+with open(f"{scriptdir}/matches/{key}/{key}_cycles.csv", mode='w', newline='') as file:
     writer = csv.writer(file)
     writer.writerow(["match", "team", "cycles"])  # Header row
     
