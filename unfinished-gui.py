@@ -1,96 +1,161 @@
-import tkinter as tk
-import subprocess
 import os
+import time
+import shutil
+import threading
+import tkinter as tk
+from tkinter import Toplevel, Listbox, Button
+import requests
+from capture_video import get_TBA, download_yt
+import sys
 
-# Path to the matches folder
-MATCHES_FOLDER = "matches"
+scriptdir = os.path.dirname(os.path.abspath(__file__))
+DOWNLOAD_QUEUE = f"{scriptdir}/processor/downloadqueue"
+TRACK_QUEUE = f"{scriptdir}/processor/trackqueue"
+PROCESS_QUEUE = f"{scriptdir}/processor/processqueue"
 
-class MatchItem:
-    """ Represents a match folder containing a video file. """
-    def __init__(self, folder_name):
-        self.folder_name = folder_name
-        self.video_path = self.find_video_file()
+# Ensure directories exist
+for folder in [DOWNLOAD_QUEUE, TRACK_QUEUE, PROCESS_QUEUE]:
+    os.makedirs(folder, exist_ok=True)
 
-    def find_video_file(self):
-        """ Locate the .mp4 file inside the match folder. """
-        folder_path = os.path.join(MATCHES_FOLDER, self.folder_name)
-        for file in os.listdir(folder_path):
-            if file.endswith(".mp4"):
-                return os.path.join(folder_path, file)
-        return None  # No video found
+class FileDownloader(threading.Thread):
+    def __init__(self, source, destination, delay, update_callback):
+        super().__init__(daemon=True)
+        self.source = source
+        self.destination = destination
+        self.update_callback = update_callback
+        self.files_to_process = []
+        self.running = False
 
-    def __str__(self):
-        return self.folder_name  # Display only folder name in UI
+    def start_monitoring(self):
+        if not self.running:
+            self.running = True
+            self.start()
 
+    def run(self):
+        while self.running:
+            self.files_to_process = []
+            for file in os.listdir(self.source):
+                self.files_to_process.append(file)
+            
+            if self.files_to_process:
+                file = self.files_to_process.pop(0)
+                file_path = os.path.join(self.source, file)
+                get_TBA(scriptdir, file)
+                # download_yt(scriptdir, file)
+                new_path = os.path.join(self.destination, os.path.basename(file_path))
+                shutil.move(file_path, new_path)
+                self.update_callback()
+            
+            time.sleep(1)
 
 class ThreeColumnGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("Match Video Organizer")
+        self.root.title("AutoSCout!!!")
+        self.listed_matches = None
+        self.entry = None
 
-        # Data for each column (list of MatchItem objects)
-        self.columns = [self.load_matches(), [], []]
-
-        # UI Elements
+        self.columns = [DOWNLOAD_QUEUE, TRACK_QUEUE, PROCESS_QUEUE]
         self.listboxes = []
-        self.buttons = []
 
-        for i in range(3):
+        for i, label in enumerate(["Download Queue", "Track Queue", "Process Queue"]):
             frame = tk.Frame(root)
-            frame.grid(row=0, column=i, padx=10, pady=10)
-
-            listbox = tk.Listbox(frame, height=10, selectmode=tk.SINGLE)
+            frame.grid(row=1, column=i, padx=10, pady=10)
+            tk.Label(frame, text=label).pack()
+            listbox = tk.Listbox(frame, height=15, width=30, selectmode=tk.EXTENDED)
             listbox.pack()
             self.listboxes.append(listbox)
 
-            button_text = "Move" if i < 2 else "Open Video"
-            button = tk.Button(frame, text=button_text, command=lambda i=i: self.handle_button(i))
-            button.pack()
-            self.buttons.append(button)
+        # Create a Text widget for displaying print statements
+        self.log_box = tk.Text(root, height=10, width=50)
+        self.log_box.grid(row=2, column=1, pady=10)
+        sys.stdout = self  # Redirect print statements to the log box
+
+        # Buttons to start daemons
+        start_download_button = tk.Button(root, text="Start Download Daemon", command=self.start_download_daemon)
+        start_download_button.grid(row=0, column=0, pady=5)
+
+        start_track_button = tk.Button(root, text="Start Track Daemon", command=self.start_track_daemon)
+        start_track_button.grid(row=0, column=1, pady=5)
+
+        # Button to open the match selection popup
+        add_button = tk.Button(root, text="Add Matches", command=self.open_match_selection)
+        add_button.grid(row=2, column=0, pady=10)
+
+        clear_button = tk.Button(root, text="Clear Queue", command=self.clear_queue)
+        clear_button.grid(row=3, column=0, pady=10)
 
         self.update_listboxes()
 
-    def load_matches(self):
-        """ Load all match folders from the matches directory. """
-        if not os.path.exists(MATCHES_FOLDER):
-            return []  # No matches folder exists
-        
-        return [MatchItem(folder) for folder in os.listdir(MATCHES_FOLDER) if os.path.isdir(os.path.join(MATCHES_FOLDER, folder))]
+        # Initialize monitoring threads
+        self.download_monitor = FileDownloader(DOWNLOAD_QUEUE, TRACK_QUEUE, 3, self.update_listboxes)
+        # self.track_monitor = FileMonitor(TRACK_QUEUE, PROCESS_QUEUE, 3, self.update_listboxes)
 
-    def handle_button(self, column_index):
-        if column_index < 2:
-            self.move_selected(column_index)
-        else:
-            self.open_selected_video()
+    def write(self, message):
+        """Redirect print statements to the log box."""
+        self.log_box.insert(tk.END, message)
+        self.log_box.yview(tk.END)  # Scroll to the bottom
 
-    def move_selected(self, column_index):
-        listbox = self.listboxes[column_index]
-        selection = listbox.curselection()
+    def start_download_daemon(self):
+        self.download_monitor.start_monitoring()
 
-        if selection:
-            index = selection[0]
-            item = self.columns[column_index].pop(index)
-            self.columns[column_index + 1].append(item)
-            self.update_listboxes()
+    def start_track_daemon(self):
+        self.track_monitor.start_monitoring()
 
-    def open_selected_video(self):
-        listbox = self.listboxes[2]
-        selection = listbox.curselection()
-
-        if selection:
-            match_item = self.columns[2][selection[0]]  # Get selected MatchItem
-            print(match_item.video_path)
-            if match_item.video_path and os.path.exists(match_item.video_path):
-                subprocess.run(["open", "-a", "QuickTime Player", match_item.video_path])
+    def get_event_matches(self):
+        if self.listed_matches and self.entry:
+            user_input = self.entry.get()
+            token = 'Fz3O8X9BRqJT8XeIs1Rcnl6rSy65NbbajU2e2V18Gc9m4vi7rG2o5QnwPUulcpz7'
+            url = f'https://www.thebluealliance.com/api/v3/event/{user_input}/matches/keys'
+            headers = {"X-TBA-Auth-Key": token}
+            response = requests.get(url, headers=headers)
+            if response.status_code == 200:
+                data = response.json()
+                print('success')
+                for item in data:
+                    self.listed_matches.insert(tk.END, item)
             else:
-                print(f"No video found in '{match_item.folder_name}'")
+                print(f"Error: {response.status_code} - {response.text}")
+
+    def clear_queue(self):
+        for item in os.listdir(DOWNLOAD_QUEUE):
+            item_path = os.path.join(DOWNLOAD_QUEUE, item)
+            os.remove(item_path)
+        self.update_listboxes()
+        print('cleared the queue')
+
+    def open_match_selection(self):
+        popup = Toplevel(self.root)
+        popup.title("Select Matches")
+        popup.geometry("300x600")
+
+        self.entry = tk.Entry(popup, width=30)
+        self.entry.pack()
+
+        button = tk.Button(popup, text="Submit", command=self.get_event_matches)
+        button.pack()
+
+        self.listed_matches = Listbox(popup, height=20, width=30, selectmode=tk.EXTENDED)
+        self.listed_matches.pack(pady=10)
+
+        def add_selected_matches():
+            selected_indices = self.listed_matches.curselection()
+            for index in selected_indices:
+                match_name = self.listed_matches.get(index)
+                file_path = os.path.join(DOWNLOAD_QUEUE, f"{match_name}")
+                with open(file_path, "w") as f:
+                    f.write("")  # Create an empty file
+            self.update_listboxes()
+            popup.destroy()
+
+        add_button = Button(popup, text="Add Selected Matches", command=add_selected_matches)
+        add_button.pack(pady=10)
 
     def update_listboxes(self):
-        """ Refresh the UI to show the updated lists. """
-        for i, listbox in enumerate(self.listboxes):
-            listbox.delete(0, tk.END)
-            for item in self.columns[i]:
-                listbox.insert(tk.END, str(item))  # Display folder name
+        for i, folder in enumerate(self.columns):
+            self.listboxes[i].delete(0, tk.END)
+            for file in os.listdir(folder):
+                self.listboxes[i].insert(tk.END, file)
 
 if __name__ == "__main__":
     root = tk.Tk()

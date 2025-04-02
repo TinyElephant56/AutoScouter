@@ -6,7 +6,7 @@ import requests
 
 # --- get TBA info----
 token = 'Fz3O8X9BRqJT8XeIs1Rcnl6rSy65NbbajU2e2V18Gc9m4vi7rG2o5QnwPUulcpz7'
-url = f'https://www.thebluealliance.com/api/v3/event/2025azgl/matches'
+url = f'https://www.thebluealliance.com/api/v3/event/2025azgl/matches/keys'
 headers = { 
     "X-TBA-Auth-Key": token
 }

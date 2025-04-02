@@ -63,15 +63,16 @@ def get_TBA(scriptdir, key):
 
 
 def download_yt(scriptdir, key):
-    try: 
-        with open (f'{scriptdir}/matches/{key}/{key}_data.json', 'r') as file:
-            data = json.load(file)
-            url = input(f"Youtube url found:\033[34m [{data['url']}] \033[0m") or data['url']
+    # try: 
+    #     with open (f'{scriptdir}/matches/{key}/{key}_data.json', 'r') as file:
+    #         data = json.load(file)
+    #         url = input(f"Youtube url found:\033[34m [{data['url']}] \033[0m") or data['url']
 
-    except:
-        url = input(f"Enter youtube url:\033[34m [no url found] \033[0m")
-    
-
+    # except:
+    #     url = input(f"Enter youtube url:\033[34m [no url found] \033[0m")
+    with open (f'{scriptdir}/matches/{key}/{key}_data.json', 'r') as file:
+        data = json.load(file)
+    url = data['url']
     print("Starting video download...")
     ydl_opts = {
         'format': 'bestvideo+bestaudio/best',
