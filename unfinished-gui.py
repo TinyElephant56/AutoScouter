@@ -7,6 +7,8 @@ from tkinter import Toplevel, Listbox, Button
 import requests
 from capture_video import get_TBA, download_yt
 import sys
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
 
 scriptdir = os.path.dirname(os.path.abspath(__file__))
 DOWNLOAD_QUEUE = f"{scriptdir}/processor/downloadqueue"
@@ -17,36 +19,53 @@ PROCESS_QUEUE = f"{scriptdir}/processor/processqueue"
 for folder in [DOWNLOAD_QUEUE, TRACK_QUEUE, PROCESS_QUEUE]:
     os.makedirs(folder, exist_ok=True)
 
+class FileHandler(FileSystemEventHandler):
+    def __init__(self, downloader):
+        self.downloader = downloader
+
+    def on_created(self, event):
+        if not event.is_directory:
+            app.update_listboxes()
+            self.downloader.process_file(event.src_path)
+
 class FileDownloader(threading.Thread):
-    def __init__(self, source, destination, delay, update_callback):
+    def __init__(self, source, destination):
         super().__init__(daemon=True)
         self.source = source
         self.destination = destination
-        self.update_callback = update_callback
-        self.files_to_process = []
         self.running = False
+        self.observer = Observer()
 
     def start_monitoring(self):
         if not self.running:
             self.running = True
+            event_handler = FileHandler(self)
+            self.observer.schedule(event_handler, self.source, recursive=False)
+            self.observer.start()
             self.start()
+            app.update_status('started', 'green')
 
     def run(self):
-        while self.running:
-            self.files_to_process = []
-            for file in os.listdir(self.source):
-                self.files_to_process.append(file)
-            
-            if self.files_to_process:
-                file = self.files_to_process.pop(0)
-                file_path = os.path.join(self.source, file)
-                get_TBA(scriptdir, file)
-                # download_yt(scriptdir, file)
-                new_path = os.path.join(self.destination, os.path.basename(file_path))
-                shutil.move(file_path, new_path)
-                self.update_callback()
-            
-            time.sleep(1)
+        try:
+            while self.running:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            self.observer.stop()
+        self.observer.join()
+
+    def process_file(self, file_path):
+        file_name = os.path.basename(file_path)
+
+        app.update_status(f'{file_name}: getting TBA', 'orange')
+        get_TBA(scriptdir, file_name)
+
+        app.update_status(f'{file_name}: getting video', 'orange')
+        download_yt(scriptdir, file_name)
+
+        app.update_status(f'{file_name}: success', 'green')
+        new_path = os.path.join(self.destination, file_name)
+        shutil.move(file_path, new_path)
+        app.update_listboxes()
 
 class ThreeColumnGUI:
     def __init__(self, root):
@@ -60,43 +79,47 @@ class ThreeColumnGUI:
 
         for i, label in enumerate(["Download Queue", "Track Queue", "Process Queue"]):
             frame = tk.Frame(root)
-            frame.grid(row=1, column=i, padx=10, pady=10)
-            tk.Label(frame, text=label).pack()
+            frame.grid(row=2, column=i, padx=10, pady=10)
+            # tk.Label(frame, text=label).pack()
             listbox = tk.Listbox(frame, height=15, width=30, selectmode=tk.EXTENDED)
             listbox.pack()
             self.listboxes.append(listbox)
 
-        # Create a Text widget for displaying print statements
+        self.download_status = tk.Label(self.root, text="Downloader not running", bg="gray", fg="white", width=30, height=2)
+        self.download_status.grid(row=1, column=0, pady=10)
+
         self.log_box = tk.Text(root, height=10, width=50)
-        self.log_box.grid(row=2, column=1, pady=10)
-        sys.stdout = self  # Redirect print statements to the log box
+        self.log_box.grid(row=4, column=1, pady=10)
 
-        # Buttons to start daemons
-        start_download_button = tk.Button(root, text="Start Download Daemon", command=self.start_download_daemon)
+        start_download_button = tk.Button(root, text="Start Download Daemon", command=self.toggle_download_daemon)
         start_download_button.grid(row=0, column=0, pady=5)
-
         start_track_button = tk.Button(root, text="Start Track Daemon", command=self.start_track_daemon)
         start_track_button.grid(row=0, column=1, pady=5)
 
         # Button to open the match selection popup
         add_button = tk.Button(root, text="Add Matches", command=self.open_match_selection)
-        add_button.grid(row=2, column=0, pady=10)
+        add_button.grid(row=4, column=0, pady=10)
 
         clear_button = tk.Button(root, text="Clear Queue", command=self.clear_queue)
-        clear_button.grid(row=3, column=0, pady=10)
+        clear_button.grid(row=5, column=0, pady=10)
 
         self.update_listboxes()
 
-        # Initialize monitoring threads
-        self.download_monitor = FileDownloader(DOWNLOAD_QUEUE, TRACK_QUEUE, 3, self.update_listboxes)
+        self.download_monitor = FileDownloader(DOWNLOAD_QUEUE, TRACK_QUEUE)
         # self.track_monitor = FileMonitor(TRACK_QUEUE, PROCESS_QUEUE, 3, self.update_listboxes)
+    
+    def update_status(self, text, color):
+        self.download_status.config(text=text, bg=color)
 
-    def write(self, message):
-        """Redirect print statements to the log box."""
-        self.log_box.insert(tk.END, message)
-        self.log_box.yview(tk.END)  # Scroll to the bottom
+    # def write(self, message):
+    #     """Redirect print statements to the log box."""
+    #     self.log_box.insert(tk.END, message)
+    #     self.log_box.yview(tk.END)  # Scroll to the bottom
 
-    def start_download_daemon(self):
+    # def flush(self):
+    #     self.log_box.update_idletasks() 
+
+    def toggle_download_daemon(self):
         self.download_monitor.start_monitoring()
 
     def start_track_daemon(self):
