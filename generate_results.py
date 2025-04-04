@@ -313,7 +313,7 @@ def merge_paths(scriptdir, key, LIVE=False, VISUAL=False, VIDEO=False, log_func=
                 print(frame_number)
         
         frame_number += 1
-        
+
         if VISUAL or VIDEO:
             for robot in robots:
                 cv2.circle(field, robot.cord, 20, tuple(round(c * 0.6) for c in COLORS[str(robot.id)]), -1)
@@ -324,17 +324,17 @@ def merge_paths(scriptdir, key, LIVE=False, VISUAL=False, VIDEO=False, log_func=
             put_text_top_right(field, str(frame_number))
             put_text_top_left(field, f"{key}")
 
-            if (frame_number-start_frame) % step_size == 0:
-                percent = ((frame_number-start_frame) / length) * 100
-                elapsed_time = time.time() - start_time
-                average_speed = elapsed_time / (frame_number-start_frame)
-                remaining_steps = length - (frame_number-start_frame)
-                eta = remaining_steps * average_speed
-                
-                if log_func:
-                    log_func(f"{key}: {percent:.0f}% done, ETA {eta:.1f}s\n")
-                else:
-                    print(f"{key}: {percent:.0f}% done, ETA {eta:.1f}s\n")
+        if (frame_number-start_frame) % step_size == 0:
+            percent = ((frame_number-start_frame) / length) * 100
+            elapsed_time = time.time() - start_time
+            average_speed = elapsed_time / (frame_number-start_frame)
+            remaining_steps = length - (frame_number-start_frame)
+            eta = remaining_steps * average_speed
+            
+            if log_func:
+                log_func(f"{key}: {percent:.0f}% done, ETA {eta:.1f}s\n")
+            else:
+                print(f"{key}: {percent:.0f}% done, ETA {eta:.1f}s\n")
 
         if VIDEO:
             field_width = field.shape[1]
@@ -349,7 +349,6 @@ def merge_paths(scriptdir, key, LIVE=False, VISUAL=False, VIDEO=False, log_func=
                 print('skipping')
 
        
-    
     if VIDEO or VISUAL:
         cap.release()
         cv2.destroyAllWindows()

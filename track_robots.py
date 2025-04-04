@@ -102,7 +102,6 @@ def get_paths(scriptdir, key, VISUAL=True, log_func=None):
     step_size = length // 50 #every 2 percent
     frame_number = start_frame
 
-
     start_time = time.time()
     while frame_number < end_frame:    
         ret, frame = cap.read()
@@ -275,9 +274,10 @@ def get_paths(scriptdir, key, VISUAL=True, log_func=None):
             average_speed = elapsed_time / (frame_number-start_frame)
             remaining_steps = length - (frame_number-start_frame)
             eta = remaining_steps * average_speed
-            print(f"Processing {key}: {percent:.0f}% done, ETA {eta:.1f}s")
             if log_func:
                 log_func(f"{key}: {percent:.0f}% done, ETA {eta:.1f}s\n")
+            else:
+                print(f"Processing {key}: {percent:.0f}% done, ETA {eta:.1f}s")
         
         if VISUAL:
             cv2.imshow("top down view", field)
@@ -285,7 +285,10 @@ def get_paths(scriptdir, key, VISUAL=True, log_func=None):
 
             if cv2.waitKey(1) == 27:
                 break
+
+        
         frame_number += 1
+
 
 
     cap.release()
