@@ -1,10 +1,12 @@
 import os
 import json
 import os.path
+import sys
 
 from capture_video import get_TBA, download_yt
 from track_robots import get_paths
 from generate_results import merge_paths
+
 
 def main():
     scriptdir = os.path.dirname(os.path.abspath(__file__))
@@ -32,8 +34,6 @@ def main():
     
     if input('display paths? [y/n] ') == 'y':
         merge_paths(scriptdir, key)
-
-
 
 if __name__ == "__main__":
     main()

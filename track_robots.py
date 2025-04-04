@@ -13,8 +13,9 @@ from rapidfuzz import process, fuzz
 import time
 import os
 from path import Path
+import sys
 
-def get_paths(scriptdir, key):
+def get_paths(scriptdir, key, VISUAL=True, log_func=None):
     with open (f'{scriptdir}/matches/{key}/{key}_data.json', 'r') as file:
         data = json.load(file)
     cap = cv2.VideoCapture(f"{scriptdir}/matches/{key}/{key}.mp4")
@@ -28,8 +29,8 @@ def get_paths(scriptdir, key):
     }
 
     print(options)
+    if log_func: log_func(f"setting up ai models...")
     MATCH_THRESHOLD = 50
-
     GROUP_DISTANCE = 90
 
     # some constants:
@@ -64,7 +65,7 @@ def get_paths(scriptdir, key):
     PAUSE = False
     STEPTHROUGH = False
 
-    def get_numbers(bbox1, bbox2): ## OLD NOT UPDATED FOR DETECTION OBJECT
+    def get_numbers(bbox1, bbox2):
             x1, y1 = bbox1
             x2, y2 = bbox2
             searchbox = frame[y1:y2, x1:x2]
@@ -88,7 +89,6 @@ def get_paths(scriptdir, key):
             self.number = number
             self.type = type
 
-        
     if PAUSE:
         cv2.imshow("top down view", field_reference)
         ret, frame = cap.read()
@@ -96,7 +96,15 @@ def get_paths(scriptdir, key):
         cv2.waitKey(0)
     print("detecting")
 
-    while True:    
+    start_frame = data['startTime']
+    end_frame = start_frame + 3600
+    length = end_frame-start_frame
+    step_size = length // 50 #every 2 percent
+    frame_number = start_frame
+
+
+    start_time = time.time()
+    while frame_number < end_frame:    
         ret, frame = cap.read()
         if not ret:
             break
@@ -260,13 +268,26 @@ def get_paths(scriptdir, key):
         for corners in [fullfieldcorners, leftfieldcorners, rightfieldcorners]:
             for corner in corners:
                 cv2.circle(field, (corner[0], corner[1]), 10, (0, 255, 0), -1)
-
-        cv2.imshow("top down view", field)
-        cv2.imshow("video", frame)
-
         
-        if cv2.waitKey(1) == 27:
-            break
+        if (frame_number-start_frame) % step_size == 0:
+            percent = ((frame_number-start_frame) / length) * 100
+            elapsed_time = time.time() - start_time
+            average_speed = elapsed_time / (frame_number-start_frame)
+            remaining_steps = length - (frame_number-start_frame)
+            eta = remaining_steps * average_speed
+            print(f"Processing {key}: {percent:.0f}% done, ETA {eta:.1f}s")
+            if log_func:
+                log_func(f"{key}: {percent:.0f}% done, ETA {eta:.1f}s\n")
+        
+        if VISUAL:
+            cv2.imshow("top down view", field)
+            cv2.imshow("video", frame)
+
+            if cv2.waitKey(1) == 27:
+                break
+        frame_number += 1
+
+
     cap.release()
     cv2.destroyAllWindows()
 
@@ -275,7 +296,7 @@ def get_paths(scriptdir, key):
     with open(f'{scriptdir}/matches/{key}/{key}_paths.json', "w") as file:
         json.dump([path.to_dict() for path in archived_paths], file, indent=4)
         
-    
+
     # output = '['
     # for path in archived_paths:
     #     output += str(path)+", "

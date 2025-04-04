@@ -9,7 +9,7 @@ import requests
 import csv
 from path import Path
         
-def merge_paths(scriptdir, key, LIVE=False, VISUAL=True):
+def merge_paths(scriptdir, key, LIVE=False, VISUAL=False, VIDEO=False, log_func=None):
     class Robot:
         def __init__(self, id, cord, color, number, cords, following):
             self.id = id
@@ -59,11 +59,12 @@ def merge_paths(scriptdir, key, LIVE=False, VISUAL=True):
 
     start_frame = matchdata['startTime']
     end_frame = start_frame+3600
-    paths = list(filter(lambda path: len(path.cords) >= 10, paths)) #majestic lambda function
+    frame_number = start_frame
+
+    paths = list(filter(lambda path: len(path.cords) >= 10, paths)) #majestic lambda function by chatgpt
+    missed_paths = []
 
     #---------preprocess----------
-    missed_paths = []
-    frame_number = start_frame
     while frame_number < end_frame:
         #if the path started on the frame, add it to the closest robot
         for path in paths:
@@ -135,7 +136,8 @@ def merge_paths(scriptdir, key, LIVE=False, VISUAL=True):
     cv2.destroyAllWindows()
     for path in missed_paths:
         print(f'lost {path.color} length {len(path.cords)}')
-
+    if log_func: 
+        log_func('merged paths, generating output video')
     
     def smooth_path(coord_dict, window_size=5): 
         frames = sorted(coord_dict.keys())
@@ -223,14 +225,20 @@ def merge_paths(scriptdir, key, LIVE=False, VISUAL=True):
             "source2":(1360, 632)
         }
     }
-    print('replaying and counting cycles')
-    if VISUAL: print('press esc to skip')
-    
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # Codec for MP4
-    out = cv2.VideoWriter(f"{scriptdir}/matches/{key}/{key}_final.mp4", fourcc, fps, output_size)
+    print('creating output video')
 
+    if VIDEO:
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # Codec for MP4
+        out = cv2.VideoWriter(f"{scriptdir}/matches/{key}/{key}_final.mp4", fourcc, fps, output_size)
+    start_frame = matchdata['startTime']
+    end_frame = start_frame + 3600
+    length = end_frame-start_frame
+    step_size = length // 50 #every 2 percent
+    frame_number = start_frame
+
+    start_time = time.time()
     while frame_number < end_frame:
-        if VISUAL: 
+        if VISUAL or VIDEO: 
             ret, video = cap.read()
             if not ret:
                 break
@@ -285,7 +293,7 @@ def merge_paths(scriptdir, key, LIVE=False, VISUAL=True):
                 if recent_movement > scorings[robot.scoring].m_conf:
                     scorings[robot.scoring].m_conf = recent_movement
 
-            if VISUAL:
+            if VISUAL or VIDEO:
                 if len(robot.cords) > 1:  
                     sorted_frames = sorted(robot.cords.keys()) 
                     for i in range(len(sorted_frames) - 1):
@@ -303,7 +311,10 @@ def merge_paths(scriptdir, key, LIVE=False, VISUAL=True):
             if str(frame_number) in matchdata[color]['increments']:
                 increments.append(frame_number)
                 print(frame_number)
-        if VISUAL:
+        
+        frame_number += 1
+        
+        if VISUAL or VIDEO:
             for robot in robots:
                 cv2.circle(field, robot.cord, 20, tuple(round(c * 0.6) for c in COLORS[str(robot.id)]), -1)
                 cv2.putText(field, f"{robot.number} | {robot.cycles}", robot.cord, 0, 1, (0, 0, 0), 3)
@@ -313,20 +324,39 @@ def merge_paths(scriptdir, key, LIVE=False, VISUAL=True):
             put_text_top_right(field, str(frame_number))
             put_text_top_left(field, f"{key}")
 
+            if (frame_number-start_frame) % step_size == 0:
+                percent = ((frame_number-start_frame) / length) * 100
+                elapsed_time = time.time() - start_time
+                average_speed = elapsed_time / (frame_number-start_frame)
+                remaining_steps = length - (frame_number-start_frame)
+                eta = remaining_steps * average_speed
+                
+                if log_func:
+                    log_func(f"{key}: {percent:.0f}% done, ETA {eta:.1f}s\n")
+                else:
+                    print(f"{key}: {percent:.0f}% done, ETA {eta:.1f}s\n")
+
+        if VIDEO:
             field_width = field.shape[1]
             video_resized = cv2.resize(video, (field_width, int(video.shape[0] * (field_width / video.shape[1]))))
             combined_frame = np.vstack((video_resized, field))
             out.write(combined_frame)
+
+        if VISUAL:
             cv2.imshow('Replay', combined_frame)
             if cv2.waitKey(1) == 27:
                 VISUAL=False
                 print('skipping')
 
-        frame_number += 1
+       
     
-    cap.release()
-    out.release()
-    cv2.destroyAllWindows()
+    if VIDEO or VISUAL:
+        cap.release()
+        cv2.destroyAllWindows()
+
+    if VIDEO:
+        out.release()
+    
 
     print(f"writing to {scriptdir}/matches/{key}/{key}_cycles.csv")
     with open(f"{scriptdir}/matches/{key}/{key}_cycles.csv", mode='w', newline='') as file:
@@ -335,9 +365,11 @@ def merge_paths(scriptdir, key, LIVE=False, VISUAL=True):
         
         for robot in robots:
             writer.writerow([key, robot.number, robot.cycles])
+            if log_func:
+                log_func(f"{key} {robot.number} {robot.cycles}")
 
 if __name__ == "__main__":
     scriptdir = os.path.dirname(os.path.abspath(__file__))
     with open (f'{scriptdir}/data/current.txt', 'r') as file:
         key = file.read().strip()
-    merge_paths(scriptdir, key)
+    merge_paths(scriptdir, key, VIDEO=True)

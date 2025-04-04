@@ -3,17 +3,8 @@ import yt_dlp
 import os
 import requests
 import json
-
-# scriptdir = os.path.dirname(os.path.abspath(__file__))
-
-# with open (f'{scriptdir}/data/current.txt', 'r') as file:
-#     key = file.read().strip()
-# print(f"\033[32mAutoScout file 1 - get TBA data and download yt video\033[0m")
-# print(f"\033[34m[press enter to use what is in blue]\033[0m")
-# key = input(f"TBA match key:\033[34m [{key}] \033[0m") or key #look at this cool little trick!
-# with open (f'{scriptdir}/data/current.txt', 'w') as file:
-#     file.write(key)
-
+import sys
+import tkinter as tk
 
 def get_TBA(scriptdir, key):
     with open (f'{scriptdir}/data/super-secret-API-key.txt', 'r') as file:
@@ -56,20 +47,20 @@ def get_TBA(scriptdir, key):
         with open(f'{scriptdir}/matches/{key}/{key}_data.json', 'w') as file:
             json.dump(formatted_data, file)
         print(f"Successfully saved match data to \033[32m{scriptdir}/matches/{key}/{key}_data.json\033[0m")
-        return True
     else:
         print(f"Error: {response.status_code} - {response.text}")
-        return False
+        raise Exception("invalid key")
 
+def download_yt(scriptdir, key, log_func=None):
+    def hook(d): #voodoo magic to get the percent to go the box
+        if d['status'] == 'downloading' and log_func:
+            percent = d.get('_percent_str', '').strip()
+            speed = d.get('_speed_str', '').strip()
+            eta = d.get('_eta_str', '').strip()
+            log_func(f"{key}: {percent} at {speed}, ETA {eta}\n")
 
-def download_yt(scriptdir, key):
-    # try: 
-    #     with open (f'{scriptdir}/matches/{key}/{key}_data.json', 'r') as file:
-    #         data = json.load(file)
-    #         url = input(f"Youtube url found:\033[34m [{data['url']}] \033[0m") or data['url']
-
-    # except:
-    #     url = input(f"Enter youtube url:\033[34m [no url found] \033[0m")
+        elif d['status'] == 'finished' and log_func:
+            log_func(f"{key}: Download complete.\n")
     with open (f'{scriptdir}/matches/{key}/{key}_data.json', 'r') as file:
         data = json.load(file)
     url = data['url']
@@ -78,6 +69,8 @@ def download_yt(scriptdir, key):
         'format': 'bestvideo+bestaudio/best',
         'outtmpl': f"{scriptdir}/matches/{key}/{key}.mp4",
         'merge_output_format': 'mp4',
+        'progress_hooks': [hook],
+        'no_color': True
         # 'quiet': True,
         # 'no_warnings': True  
     }
@@ -85,4 +78,3 @@ def download_yt(scriptdir, key):
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download([url])
     print(f"Downloaded video to \033[32m{ydl_opts['outtmpl']}\033[0m")
-
