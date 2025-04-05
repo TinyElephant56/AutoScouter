@@ -4,17 +4,18 @@ import shutil
 import threading
 import tkinter as tk
 from tkinter import Toplevel, Listbox, Button
-from PIL import Image, ImageTk
 import requests
 from capture_video import get_TBA, download_yt
 from track_robots import get_paths
 from generate_results import merge_paths
+from sheets_upload import upload_to_sheets
 import sys
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 import queue
 from abc import ABC, abstractmethod
 import subprocess
+import csv 
 
 scriptdir = os.path.dirname(os.path.abspath(__file__))
 DOWNLOAD_QUEUE = f"{scriptdir}/processor/downloadqueue"
@@ -99,13 +100,13 @@ class FileProcessor(threading.Thread, ABC):
             self.observer.stop()
         self.observer.join()
 
-    @abstractmethod # abstract method just to be cool
+    @abstractmethod # abstract method just to impress Ms Wade
     def process_file(self, file_path): 
         pass
 
 # first step in the pipeline: get the video and TBA data
 class MatchDownloader(FileProcessor):
-    def process_file(self, file_path): # polYMORPHISM
+    def process_file(self, file_path): # polymorphism i think? (to impress Ms Wade)
         file_name = os.path.basename(file_path)
 
         self.status_callback(f'{file_name}: getting TBA', 'orange')
@@ -116,6 +117,9 @@ class MatchDownloader(FileProcessor):
 
         self.status_callback(f'{file_name}: success', 'green')
         new_path = os.path.join(self.destination, file_name)
+        
+        time.sleep(0.1)
+        print(os.listdir(DOWNLOAD_QUEUE))
         shutil.move(file_path, new_path) # move the match in the pipeline
         app.update_listboxes() # update visually
 
@@ -227,8 +231,6 @@ class MainPanel:
         self.system_status = tk.Text(root, height=10, width=38)
         self.system_status.grid(row=5, column=3, pady=10)
 
-        # buttons
-        tk.Button(root, text="Start robot tracker", command=self.start_track_daemon).grid(row=4, column=1, pady=5)
         
         # creates a grid inside a grid so four buttons occupy one root grid space
         button_box0 = tk.Frame(root, pady=5) 
@@ -238,6 +240,11 @@ class MainPanel:
         tk.Button(button_box0, text="Start", command=self.toggle_download_daemon).grid(row=0, column=0, pady=5)
         tk.Button(button_box0, text="Refresh Files", command=self.update_listboxes).grid(row=0, column=1)
         
+        button_box1 = tk.Frame(root, pady=5)
+        button_box1.grid(row=4, column=1)
+        tk.Button(button_box1, text="Start robot tracker", command=self.start_track_daemon).grid(row=0, column=0, pady=5)
+        tk.Button(button_box1, text="Ben Mode", command=self.ben_mode).grid(row=1, column=0)
+
         button_box2 = tk.Frame(root, pady=5)
         button_box2.grid(row=4, column=2)
         tk.Button(button_box2, text="Get video and cycles", command=self.start_visualprocessor).grid(row=0, column=0, pady=5)
@@ -247,7 +254,9 @@ class MainPanel:
         button_box3.grid(row=4, column=3)
         tk.Button(button_box3, text="View selected match", command=self.open_selected_video).grid(row=0, column=0, columnspan=2, pady=5)
         tk.Button(button_box3, text="Quit", command=quit).grid(row=1, column=0, pady=5)
-        tk.Button(button_box3, text="Ben Mode", command=self.ben_mode).grid(row=1, column=1, pady=5)
+        tk.Button(button_box3, text="Upload selected", command=self.upload_results).grid(row=1, column=1, pady=5)
+
+        
 
         self.update_listboxes() # visually update the columns
         # create the three daemons
@@ -309,9 +318,11 @@ class MainPanel:
     #pop up a window to let you add matches to the download queue
     def open_match_selection(self):
         popup = Toplevel(self.root)
-        popup.title("Enter event or team key")
+        popup.title("Add matches to queue")
         popup.geometry("300x600")
-
+        
+        tk.Label(popup, text="enter TBA event or team key").pack(pady=10)
+        
         self.entry = tk.Entry(popup, width=30) # input box
         self.entry.pack(pady=10)
 
@@ -320,7 +331,7 @@ class MainPanel:
         tk.Button(option_box, text="Event matches", command=self.get_event_matches).grid(row=0, column=0, padx=5)
         tk.Button(option_box, text="Team matches", command=self.get_team_matches).grid(row=0, column=1, padx=5)
 
-        self.listed_matches = Listbox(popup, height=26, width=30, selectmode=tk.EXTENDED)
+        self.listed_matches = Listbox(popup, height=24, width=30, selectmode=tk.EXTENDED)
         self.listed_matches.pack(pady=10)
 
         def add_selected_matches():
@@ -339,27 +350,12 @@ class MainPanel:
     def get_event_matches(self):
         if self.listed_matches and self.entry:
             user_input = self.entry.get()
-            token = 'Fz3O8X9BRqJT8XeIs1Rcnl6rSy65NbbajU2e2V18Gc9m4vi7rG2o5QnwPUulcpz7' # dont rate limit me pls
+            with open (f'{scriptdir}/data/super-secret-API-key.txt', 'r') as file:
+                token = file.read() # dont rate limit me pls
             url = f'https://www.thebluealliance.com/api/v3/event/{user_input}/matches/keys'
             headers = {"X-TBA-Auth-Key": token}
             response = requests.get(url, headers=headers)
-            if response.status_code == 200: # if the status do be looking OK
-                data = response.json()
-                print('success')
-                for item in data: #add it to the list
-                    self.listed_matches.insert(tk.END, item)
-            else:
-                print(f"Error: {response.status_code} - {response.text}")
-    
-    def get_team_matches(self): # i have no wifi rn, to be finished
-        print('its not implimented yet')
-        if self.listed_matches and self.entry:
-            user_input = self.entry.get()
-            token = 'Fz3O8X9BRqJT8XeIs1Rcnl6rSy65NbbajU2e2V18Gc9m4vi7rG2o5QnwPUulcpz7'
-            url = f'https://www.thebluealliance.com/api/v3/teams/{user_input}/matches/' # i hope this exists
-            headers = {"X-TBA-Auth-Key": token}
-            response = requests.get(url, headers=headers)
-            if response.status_code == 200: 
+            if response.status_code == 200:
                 data = response.json()
                 print('success')
                 for item in data:
@@ -367,10 +363,40 @@ class MainPanel:
             else:
                 print(f"Error: {response.status_code} - {response.text}")
 
+                
+    
+    #TODO: put the two lines below in a thread (so it can't crash the entire gui)
+    # def bad_append_to_logbox(self, message):  #this is supposed to be defined by class, i should have made a fourth class
+    #         # self.system_status.delete(1.0, tk.END)
+    #         self.system_status.insert(tk.END, message+"\n")
+    #         self.system_status.yview(tk.END)
+    def upload_results(self): # uploads selected matches to google sheets
+        selection = self.listboxes[3].curselection()
+        if selection:
+            for match in selection:
+                match_name = self.listboxes[3].get([match]) 
+                print(match_name)
+                upload_to_sheets(scriptdir, match_name) #TODO: test it
+
+    def get_team_matches(self):
+        if self.listed_matches and self.entry:
+            user_input = self.entry.get()
+            with open (f'{scriptdir}/data/super-secret-API-key.txt', 'r') as file:
+                token = file.read() # dont rate limit me pls
+            url = f'https://www.thebluealliance.com/api/v3/team/{user_input}/matches/2025/keys'
+            headers = {"X-TBA-Auth-Key": token}
+            response = requests.get(url, headers=headers)
+            if response.status_code == 200: # if the status do be looking OK
+                matches = response.json()
+                for item in matches:
+                    self.listed_matches.insert(tk.END, item)
+            else:
+                print(f"Error: {response.status_code} - {response.text}")
+
     def update_tick(self):
-        self.download_cat.breathe() # meow
-        self.track_cat.breathe()
-        self.process_cat.breathe()
+        self.download_cat.breathe() # OwO
+        self.track_cat.breathe() # OwO
+        self.process_cat.breathe() # OwO
         self.root.after(1000, self.update_tick) #calls another update_tick after 1 second
         
 

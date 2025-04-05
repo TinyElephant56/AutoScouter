@@ -52,7 +52,7 @@ def get_TBA(scriptdir, key):
         raise Exception("invalid key")
 
 def download_yt(scriptdir, key, log_func=None):
-    def hook(d): #voodoo magic to get the percent to go the box
+    def hook(d): 
         if d['status'] == 'downloading' and log_func:
             percent = d.get('_percent_str', '').strip()
             speed = d.get('_speed_str', '').strip()

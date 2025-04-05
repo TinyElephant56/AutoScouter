@@ -1,5 +1,5 @@
 # Autoscout
-by Colin Haine, March 2025
+by Colin Haine, April 2025
 
 ## Description
 From a video of a match, it autonomously forms the paths of each robot and how many cycles each robot does.
@@ -21,18 +21,26 @@ ai robot detection model dataset, trained specifically on cave2025:
 https://universe.roboflow.com/frcrobotfinder/ventura-2025 
 
 ### Next steps
-- add scoring:
-    - ✅ find the increments in score with the top display.
-    - match up the increments and make a scoring interface
-- add an interface:
-    - ✅ automatically get a video, from twitch or youtube
-    - crop down that video to the standard size that i used
-    - start with discord bot interface (because its easiest for backend)
-    - get a computer (cad laptop) or server to run it
-    - a web interface view results?
-- Create a database of the results
-- Train a new, faster ai model
-- Create documentation on how to install this
+- MAKE IT RELIABLE
+    - Correct certain maching algorithms
+    - fine tune the joining points
+    - handle endgame
+    - use match numbers to determine confidence when matching up paths
+- Add robustness for multiple competitions:
+    - have a folder for each comp, that has the data for the corner locations
+    - train an ai based on general lighting, add a parameter to choose which model
+    - try out more models
+- ADD SCORING
+    - implement scoring increments
+    - handle algae
+- Add speed parameters (ex. skipping every other frame)
+    - See how much the reliability drops if so
+    - Add checkboxes/drop downs to the ui for parameters
+- add tests (useful when installing on another computer since there are so many libraries used)
+    - chatgpt should do a good job of this
+- try installing on windows and resolve problems
+    - create steps to use nvidia GPU
+- raise an army to train the ai during worlds
 
 ## Installation
 1. Install python:
