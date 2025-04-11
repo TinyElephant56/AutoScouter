@@ -41,6 +41,8 @@ https://universe.roboflow.com/frcrobotfinder/ventura-2025
 - try installing on windows and resolve problems
     - create steps to use nvidia GPU
 - raise an army to train the ai during worlds
+- make the kittens cuter
+- add status box for gpu utilized  
 
 ## Installation
 1. Install python:

@@ -9,6 +9,7 @@ from capture_video import get_TBA, download_yt
 from track_robots import get_paths
 from generate_results import merge_paths
 from sheets_upload import upload_to_sheets
+from get_increments import get_increments
 import sys
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
@@ -115,9 +116,12 @@ class MatchDownloader(FileProcessor):
         self.status_callback(f'{file_name}: getting video', 'orange')
         download_yt(scriptdir, file_name, log_func=self.append_to_logbox) # function in capture_video.py
 
+        self.status_callback(f'{file_name}: getting start/end times', 'orange')
+        get_increments(scriptdir, file_name, INCREMENTS=False, log_func=self.append_to_logbox)
+
         self.status_callback(f'{file_name}: success', 'green')
         new_path = os.path.join(self.destination, file_name)
-        
+
         time.sleep(0.1)
         print(os.listdir(DOWNLOAD_QUEUE))
         shutil.move(file_path, new_path) # move the match in the pipeline

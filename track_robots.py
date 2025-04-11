@@ -14,21 +14,21 @@ import time
 import os
 from path import Path
 import sys
+# lets get this structured
+# combine rly close points (<10)
+# combine very likely paths (<10 from last frame)
+# 
 
-def get_paths(scriptdir, key, VISUAL=True, log_func=None):
+def get_paths(scriptdir, key, VISUAL=True, log_func=print):
     with open (f'{scriptdir}/matches/{key}/{key}_data.json', 'r') as file:
         data = json.load(file)
-    cap = cv2.VideoCapture(f"{scriptdir}/matches/{key}/{key}.mp4")
-    cap.set(cv2.CAP_PROP_POS_FRAMES, data['startTime'])
-
     field_reference = cv2.imread(f"{scriptdir}/data/top-down.png")
-
     options = {
         "blue": [x[3:] for x in data['blue']['numbers']],
         "red": [x[3:] for x in data['red']['numbers']]
     }
 
-    print(options)
+    log_func(options)
     if log_func: log_func(f"setting up ai models...")
     MATCH_THRESHOLD = 50
     GROUP_DISTANCE = 90
@@ -39,25 +39,28 @@ def get_paths(scriptdir, key, VISUAL=True, log_func=None):
 
     print("setting up models...")
     model = YOLO(scriptdir+"/data/ventura-best-2.pt") #robot detection model
-
     reader = easyocr.Reader(['en'], recog_network='english_g2', user_network_directory=None) #text detection model
 
-    allcorners = json.load(open(f"{scriptdir}/data/fieldcorners.json", 'r'))
-    # fieldcorners: the top down diagram
-    fullfieldcorners = allcorners["fullfieldcorners"]
-    leftfieldcorners = allcorners["leftfieldcorners"]
-    rightfieldcorners = allcorners["rightfieldcorners"]
-    # framecorners: the video
-    fullframecorners = allcorners["fullframecorners"]
-    leftframecorners = allcorners["leftframecorners"]
-    rightframecorners = allcorners["rightframecorners"]
+   
+    fieldcorners = json.load(open(f"{scriptdir}/data/fieldcorners.json", 'r'))
+    fullfieldcorners = fieldcorners["fullfieldcorners"]
+    leftfieldcorners = fieldcorners["leftfieldcorners"]
+    rightfieldcorners = fieldcorners["rightfieldcorners"]
+
+    try:
+        event = data['comp']
+    except:
+        print("NO COMP DISCOVERED DEFAULTING")
+        event = "2025azgl"
+    framecorners = json.load(open(f"{scriptdir}/events/{event}.json", 'r'))
+
+    fullframecorners = framecorners["fullframecorners"]
+    leftframecorners = framecorners["leftframecorners"]
+    rightframecorners = framecorners["rightframecorners"]
     # get perspective matricies to convert between the top down and camera perspectives
     fullmatrix = cv2.getPerspectiveTransform(np.array(fullframecorners, dtype="float32"), np.array(fullfieldcorners, dtype="float32"))
     leftmatrix = cv2.getPerspectiveTransform(np.array(leftframecorners, dtype="float32"), np.array(leftfieldcorners, dtype="float32"))
     rightmatrix = cv2.getPerspectiveTransform(np.array(rightframecorners, dtype="float32"), np.array(rightfieldcorners, dtype="float32"))
-
-    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-
     active_paths = []
     archived_paths = []
     path_id = 0
@@ -78,6 +81,7 @@ def get_paths(scriptdir, key, VISUAL=True, log_func=None):
 
             text = reader.readtext(searchbox, detail=0, allowlist="0123456789") 
             return text
+    
     class Detection:
         def __init__(self, id, cord, color, conf, bbox1, bbox2, number, type):
             self.id = id
@@ -89,27 +93,29 @@ def get_paths(scriptdir, key, VISUAL=True, log_func=None):
             self.number = number
             self.type = type
 
-    if PAUSE:
-        cv2.imshow("top down view", field_reference)
-        ret, frame = cap.read()
-        cv2.imshow("video", frame)
-        cv2.waitKey(0)
-    print("detecting")
+    # if PAUSE:
+    #     cv2.imshow("top down view", field_reference)
+    #     ret, frame = cap.read()
+    #     cv2.imshow("video", frame)
+    #     cv2.waitKey(0)
+    # print("detecting")
 
-    start_frame = data['startTime']
-    end_frame = start_frame + 3600
+    start_frame = data['startFrame']-60
+    end_frame = data['stopFrame']-30
     length = end_frame-start_frame
     step_size = length // 50 #every 2 percent
     frame_number = start_frame
+
+    cap = cv2.VideoCapture(f"{scriptdir}/matches/{key}/{key}.mp4")
+    cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
 
     start_time = time.time()
     while frame_number < end_frame:    
         ret, frame = cap.read()
         if not ret:
             break
-        cv2.rectangle(frame, [403, 370], [511, 394], (0,0,0), -1)
+        # cv2.rectangle(frame, [403, 370], [511, 394], (0,0,0), -1)
 
-        frame_number = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
         field = field_reference.copy()
 
         results = model(frame, device="mps", verbose=False, iou=0.8)
@@ -271,7 +277,7 @@ def get_paths(scriptdir, key, VISUAL=True, log_func=None):
         if (frame_number-start_frame) % step_size == 0:
             percent = ((frame_number-start_frame) / length) * 100
             elapsed_time = time.time() - start_time
-            average_speed = elapsed_time / (frame_number-start_frame)
+            average_speed = elapsed_time / (frame_number-start_frame+1)
             remaining_steps = length - (frame_number-start_frame)
             eta = remaining_steps * average_speed
             if log_func:
@@ -284,12 +290,8 @@ def get_paths(scriptdir, key, VISUAL=True, log_func=None):
             cv2.imshow("video", frame)
 
             if cv2.waitKey(1) == 27:
-                break
-
-        
+                break        
         frame_number += 1
-
-
 
     cap.release()
     cv2.destroyAllWindows()
@@ -312,3 +314,8 @@ def get_paths(scriptdir, key, VISUAL=True, log_func=None):
     # print(f"Saved paths to \033[32m{scriptdir}/matches/{key}/{key}_paths.txt\033[0m")
 
 
+if __name__ == "__main__":
+    scriptdir = os.path.dirname(os.path.abspath(__file__))
+    with open (f'{scriptdir}/data/current.txt', 'r') as file:
+        key = file.read().strip()
+    get_paths(scriptdir, key)

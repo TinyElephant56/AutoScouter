@@ -6,7 +6,7 @@ import sys
 from capture_video import get_TBA, download_yt
 from track_robots import get_paths
 from generate_results import merge_paths
-
+from get_increments import get_increments
 
 def main():
     scriptdir = os.path.dirname(os.path.abspath(__file__))
@@ -30,6 +30,7 @@ def main():
     else:
         tracked = 'y'
     if input(f'start tracking? [y/n]\033[34m [{tracked}] \033[0m') or tracked == 'y':
+        get_increments(scriptdir, key)
         get_paths(scriptdir, key)
     
     if input('display paths? [y/n] ') == 'y':

@@ -16,8 +16,8 @@ def get_TBA(scriptdir, key):
     if response.status_code == 200:
         data = response.json()  # Parse JSON response
         formatted_data = {
-            'startTime': 240,
             'url': f"https://www.youtube.com/watch?v={data['videos'][0]['key']}",
+            'comp': data['event_key'],
             'blue': {
                 'numbers': data['alliances']['blue']['team_keys'],
                 'score':data['score_breakdown']['blue']['wallAlgaeCount'],
@@ -47,20 +47,33 @@ def get_TBA(scriptdir, key):
         with open(f'{scriptdir}/matches/{key}/{key}_data.json', 'w') as file:
             json.dump(formatted_data, file)
         print(f"Successfully saved match data to \033[32m{scriptdir}/matches/{key}/{key}_data.json\033[0m")
+        if os.path.exists(f"{scriptdir}/events/{data['event_key']}.json"):
+            return None
+        else:
+            return data['event_key']
     else:
         print(f"Error: {response.status_code} - {response.text}")
         raise Exception("invalid key")
+    
 
-def download_yt(scriptdir, key, log_func=None):
+def download_yt(scriptdir, key, log_func=print):
     def hook(d): 
-        if d['status'] == 'downloading' and log_func:
+        if d['status'] == 'downloading':
             percent = d.get('_percent_str', '').strip()
             speed = d.get('_speed_str', '').strip()
             eta = d.get('_eta_str', '').strip()
             log_func(f"{key}: {percent} at {speed}, ETA {eta}\n")
-
-        elif d['status'] == 'finished' and log_func:
+        elif d['status'] == 'finished':
             log_func(f"{key}: Download complete.\n")
+
+    class MyLogger:
+        def debug(self, msg):
+            log_func(msg)
+        def warning(self, msg):
+            log_func(f"WARNING: {msg}")
+        def error(self, msg):
+            log_func(f"ERROR: {msg}")
+
     with open (f'{scriptdir}/matches/{key}/{key}_data.json', 'r') as file:
         data = json.load(file)
     url = data['url']
@@ -69,6 +82,7 @@ def download_yt(scriptdir, key, log_func=None):
         'format': 'bestvideo+bestaudio/best',
         'outtmpl': f"{scriptdir}/matches/{key}/{key}.mp4",
         'merge_output_format': 'mp4',
+        'logger': MyLogger(),
         'progress_hooks': [hook],
         'no_color': True
         # 'quiet': True,

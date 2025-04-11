@@ -14,8 +14,8 @@ headers = {
 response = requests.get(url, headers=headers)
 if response.status_code == 200:
     data = response.json()  # Parse JSON response
-    with open("++hajsdf.json", 'w') as file:
-        json.dump(data, file)
+    # with open("++hajsdf.json", 'w') as file:
+    #     json.dump(data, file)
     print(data)
 else:
     print(f"Error: {response.status_code} - {response.text}")
