@@ -53,12 +53,25 @@ def merge_paths(scriptdir, key, LIVE=False, VISUAL=False, VIDEO=False, log_func=
 
     print(len(paths))
 
-    COLORS = {"0": (255, 255, 0), "1": (0, 255, 255), "2": (0, 127, 255), "3": (0, 0, 255), "4": (255, 0, 0), "5": (255, 0, 255)}
+    COLORS = {
+        "0": (255, 255, 0),    # Yellow
+        "1": (0, 255, 255),    # Cyan
+        "2": (0, 127, 255),    # Light Blue
+        "3": (0, 0, 255),      # Blue
+        "4": (255, 0, 0),      # Red
+        "5": (255, 0, 255),    # Magenta
+        "6": (0, 255, 0),      # Green
+        "7": (255, 165, 0),    # Orange
+        "8": (128, 0, 128),    # Purple
+        "9": (165, 42, 42),    # Brown
+        "10": (0, 128, 128),   # Teal
+        "11": (128, 128, 0)    # Olive
+    }    
     robots = []
     FOLLOW_DISTANCE = 200
 
-    start_frame = matchdata['startTime']
-    end_frame = start_frame+3600
+    start_frame = matchdata['startFrame']-60
+    end_frame = matchdata['stopFrame']-60
     frame_number = start_frame
 
     paths = list(filter(lambda path: len(path.cords) >= 10, paths)) #majestic lambda function by chatgpt
@@ -80,12 +93,13 @@ def merge_paths(scriptdir, key, LIVE=False, VISUAL=False, VIDEO=False, log_func=
                     if not bestrobot.number:
                         bestrobot.number = path.number
                     bestrobot.following = True
-                elif len(robots) < 6:
-                    robots.append(Robot(len(robots), path.init_cord, path.color, path.number, path.cords, True))
                 else:
+                # elif len(robots) < 6:
+                    robots.append(Robot(len(robots), path.init_cord, path.color, path.number, path.cords, True))
+                # else:
                     # print(f"missed {path.color} length {len(path.cords)}")
                     # if path.number:
-                        missed_paths.append(path)
+                        # missed_paths.append(path)
         
         for path in missed_paths[:]:
             closest = FOLLOW_DISTANCE
@@ -230,8 +244,8 @@ def merge_paths(scriptdir, key, LIVE=False, VISUAL=False, VIDEO=False, log_func=
     if VIDEO:
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # Codec for MP4
         out = cv2.VideoWriter(f"{scriptdir}/matches/{key}/{key}_final.mp4", fourcc, fps, output_size)
-    start_frame = matchdata['startTime']
-    end_frame = start_frame + 3600
+    start_frame = matchdata['startFrame']
+    end_frame = matchdata['stopFrame']
     length = end_frame-start_frame
     step_size = length // 50 #every 2 percent
     frame_number = start_frame
@@ -342,8 +356,13 @@ def merge_paths(scriptdir, key, LIVE=False, VISUAL=False, VIDEO=False, log_func=
             combined_frame = np.vstack((video_resized, field))
             out.write(combined_frame)
 
-        if VISUAL:
+        if VISUAL and VIDEO:
             cv2.imshow('Replay', combined_frame)
+            if cv2.waitKey(1) == 27:
+                VISUAL=False
+                print('skipping')
+        elif VISUAL:
+            cv2.imshow('Replay', field)
             if cv2.waitKey(1) == 27:
                 VISUAL=False
                 print('skipping')
@@ -352,23 +371,31 @@ def merge_paths(scriptdir, key, LIVE=False, VISUAL=False, VIDEO=False, log_func=
     if VIDEO or VISUAL:
         cap.release()
         cv2.destroyAllWindows()
-
     if VIDEO:
         out.release()
     
-
     print(f"writing to {scriptdir}/matches/{key}/{key}_cycles.csv")
     with open(f"{scriptdir}/matches/{key}/{key}_cycles.csv", mode='w', newline='') as file:
         writer = csv.writer(file)
         writer.writerow(["match", "team", "cycles"])  # Header row
-        
         for robot in robots:
             writer.writerow([key, robot.number, robot.cycles])
             if log_func:
                 log_func(f"{key} {robot.number} {robot.cycles}")
+    
+    for robot in robots:
+        final_paths = np.zeros((field_height, field_width, 3), dtype=np.uint8) #change the 3 to 4 for alpha
+        if robot.number:
+            sorted_frames = sorted(robot.cords.keys()) 
+            for i in range(len(sorted_frames) - 1):
+                if sorted_frames[i] < frame_number:
+                    frame1, frame2 = sorted_frames[i], sorted_frames[i + 1]
+                    cv2.line(final_paths, robot.cords[frame1], robot.cords[frame2], COLORS[str(robot.id)], 2)
+            os.makedirs(f"{scriptdir}/teams/{robot.number}", exist_ok=True)
+            cv2.imwrite(f"{scriptdir}/teams/{robot.number}/{key}.png", final_paths)
 
 if __name__ == "__main__":
     scriptdir = os.path.dirname(os.path.abspath(__file__))
     with open (f'{scriptdir}/data/current.txt', 'r') as file:
         key = file.read().strip()
-    merge_paths(scriptdir, key, VIDEO=True)
+    merge_paths(scriptdir, key, VIDEO=False, VISUAL=False)

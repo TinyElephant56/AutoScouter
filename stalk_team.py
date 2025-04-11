@@ -37,7 +37,7 @@ if __name__ == "__main__":
     print(matches)
 
 
-    if True:
+    if False:
         for time in matches:
             key = matches[time]
             path = f"{scriptdir}/matches/{key}"

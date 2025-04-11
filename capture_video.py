@@ -47,6 +47,7 @@ def get_TBA(scriptdir, key):
         with open(f'{scriptdir}/matches/{key}/{key}_data.json', 'w') as file:
             json.dump(formatted_data, file)
         print(f"Successfully saved match data to \033[32m{scriptdir}/matches/{key}/{key}_data.json\033[0m")
+        
         if os.path.exists(f"{scriptdir}/events/{data['event_key']}.json"):
             return None
         else:
